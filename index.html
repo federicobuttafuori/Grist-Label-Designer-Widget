@@ -131,11 +131,15 @@
         .layer-pick-peek-fragment .layer-pick-peek-clip{position:absolute;inset:0;overflow:hidden;pointer-events:none}
         .layer-pick-peek-fragment .layer-pick-peek-clone{pointer-events:none;opacity:0.72;border-color:transparent!important;box-shadow:none!important;outline:none!important}
         .layer-pick-peek-element-outline{pointer-events:none;box-sizing:border-box;border:2px dashed rgba(156,39,176,0.75);box-shadow:0 0 0 1px rgba(156,39,176,0.22);background:transparent}
-        .resize-handle{position:absolute;width:24px;height:24px;bottom:-12px;right:-12px;cursor:nwse-resize;display:none;z-index:10000;pointer-events:auto;background:transparent}
-        .resize-handle-inner{position:absolute;width:12px;height:12px;background:#007aff;border:2px solid #fff;border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%);box-shadow:0 2px 4px rgba(0,0,0,.2)}
+        .resize-handle{position:absolute;width:12px;height:12px;bottom:-6px;right:-6px;cursor:nwse-resize;display:none;z-index:10000;pointer-events:auto;background:transparent}
+        .resize-handle-inner{position:absolute;top:50%;left:50%;width:8px;height:8px;box-sizing:border-box;background:#fff;border:1.5px solid #1e3a8a;border-radius:1px;transform:translate(-50%,-50%);box-shadow:0 0 0 1px #fff,0 1px 2px rgba(0,0,0,.28);pointer-events:none}
+        .resize-handle:hover .resize-handle-inner,.resize-handle:active .resize-handle-inner{background:#1d4ed8}
         .label-element.selected .resize-handle{display:block}
-            .resize-handle.group-resize{width:28px;height:28px;bottom:-14px;right:-14px;z-index:10001}
-            .resize-handle.group-resize .resize-handle-inner{background:#ff6b00;width:14px;height:14px;box-shadow:0 2px 6px rgba(255,107,0,.4)}
+            .resize-handle.group-resize{width:12px;height:12px;bottom:-6px;right:-6px;z-index:10001}
+            .resize-handle.group-resize .resize-handle-inner{border-color:#9a3412}
+            .resize-handle.group-resize:hover .resize-handle-inner,.resize-handle.group-resize:active .resize-handle-inner{background:#c2410c}
+        .group-bounds-frame{position:absolute;pointer-events:none;box-sizing:border-box;border:1.5px dashed #ff6b00;background:transparent;z-index:9998}
+        .group-bounds-frame .resize-handle{display:block;pointer-events:auto}
         .label-element img,.label-element svg{width:100%;height:100%;object-fit:contain;pointer-events:none}
         .status-message{position:fixed;top:60px;right:20px;padding:12px 16px;background:#4CAF50;color:#fff;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,.2);z-index:1000;animation:slideIn .3s ease-out}
         @keyframes slideIn{from{transform:translateX(400px);opacity:0}to{transform:translateX(0);opacity:1}}
@@ -153,6 +157,7 @@
             #mini-toolbar .mini-toolbar-col3 button{padding:6px 10px;font-size:13px;white-space:nowrap;align-self:stretch}
             .widget-mode #canvas-container .label-element{pointer-events:none;cursor:default}
             .widget-mode #canvas-container #layer-stack-indicator{display:none!important}
+            .widget-mode #canvas-container .group-bounds-frame{display:none!important}
             .widget-mode #canvas-container{cursor:default}
         .column-mention-dropdown{position:fixed;z-index:10000;background:#fff;border:1px solid #ccc;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,.15);max-height:200px;overflow-y:auto;min-width:160px;display:none}
         .column-mention-dropdown.column-mention-dropdown-visible{display:block}
@@ -421,6 +426,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
     let columnRefToRecordKey = new Map();
     let columnLabelToRefs = new Map();
     let drag = false, resizeMode = false, ctx = {};
+    let dragMoved = false;
+    let pointerDownClient = { x: 0, y: 0 };
+    let pendingSelectClick = null;
         let canvasRotation = 0;           // temporary canvas rotation (0, 90, 180, 270 degrees)
         let W = 8, H = 5;                 // Current dimensions (dynamic)
         let globalSequenceCountColumn = ''; // Global count column (shared across all designs)
@@ -525,6 +533,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 html += '</optgroup>';
             }
             
+            return html;
+        }
+
+        function generateRegexFontFamilyOptions(currentFontFamily){
+            const inheritSelected = !currentFontFamily || currentFontFamily === 'inherit';
+            let html = `<option value="inherit" ${inheritSelected ? 'selected' : ''}>Inherit</option>`;
+            html += generateFontOptions(inheritSelected ? '' : currentFontFamily);
+            if(!inheritSelected && !ALL_FONTS.some(f => f.value === currentFontFamily)){
+                html += `<option value="${escapeHtml(currentFontFamily)}" selected>${escapeHtml(currentFontFamily)}</option>`;
+            }
             return html;
         }
         
@@ -741,6 +759,15 @@ document.addEventListener('DOMContentLoaded', ()=>{
             const pixels = valueCm * PIXELS_PER_CM;
             const roundedPixels = Math.round(pixels);
             return roundedPixels / PIXELS_PER_CM;
+        }
+
+        function finiteNumber(value, fallback){
+            const n = Number(value);
+            return Number.isFinite(n) ? n : fallback;
+        }
+
+        function lineThicknessPx(el){
+            return Math.max(0, finiteNumber(el && el.props && el.props.thickness, 2));
         }
 
         function getElementRotationDeg(el){
@@ -1018,6 +1045,94 @@ document.addEventListener('DOMContentLoaded', ()=>{
             if(list.length === 1) clampElementInsideCanvas(list[0]);
         }
 
+        function originLimitsForElement(el){
+            const bounds = getRotatedBounds(el);
+            const ew = bounds.width, eh = bounds.height;
+            return {
+                minX: (ew - el.width) / 2,
+                maxX: W - (ew + el.width) / 2,
+                minY: (eh - el.height) / 2,
+                maxY: H - (eh + el.height) / 2
+            };
+        }
+
+        function clampRigidTranslation(items, dx, dy){
+            let outDx = dx, outDy = dy;
+            (items || []).forEach(it => {
+                const el = S.find(s => s.id === it.id);
+                if(!el) return;
+                const lim = originLimitsForElement(el);
+                if(lim.maxX >= lim.minX){
+                    outDx = Math.max(lim.minX - it.startX, Math.min(outDx, lim.maxX - it.startX));
+                }
+                if(lim.maxY >= lim.minY){
+                    outDy = Math.max(lim.minY - it.startY, Math.min(outDy, lim.maxY - it.startY));
+                }
+            });
+            return { dx: outDx, dy: outDy };
+        }
+
+        function partitionDragItems(items){
+            const buckets = new Map();
+            const loose = [];
+            (items || []).forEach(it => {
+                const g = getGroupForElement(it.id);
+                if(g){
+                    if(!buckets.has(g.id)) buckets.set(g.id, []);
+                    buckets.get(g.id).push(it);
+                } else {
+                    loose.push(it);
+                }
+            });
+            return { rigidBuckets: Array.from(buckets.values()), loose };
+        }
+
+        function applyPartitionedTranslation(items, dx, dy, free){
+            if(free){
+                (items || []).forEach(it => {
+                    const el = S.find(s => s.id === it.id);
+                    if(!el) return;
+                    el.x = snapToPixel(it.startX + dx);
+                    el.y = snapToPixel(it.startY + dy);
+                });
+                return;
+            }
+            const { rigidBuckets, loose } = partitionDragItems(items);
+            rigidBuckets.forEach(bucket => {
+                const rigid = clampRigidTranslation(bucket, dx, dy);
+                bucket.forEach(it => {
+                    const el = S.find(s => s.id === it.id);
+                    if(!el) return;
+                    el.x = snapToPixel(it.startX + rigid.dx);
+                    el.y = snapToPixel(it.startY + rigid.dy);
+                });
+            });
+            loose.forEach(it => {
+                const el = S.find(s => s.id === it.id);
+                if(!el) return;
+                const lim = originLimitsForElement(el);
+                el.x = snapToPixel(Math.max(lim.minX, Math.min(it.startX + dx, lim.maxX)));
+                el.y = snapToPixel(Math.max(lim.minY, Math.min(it.startY + dy, lim.maxY)));
+            });
+        }
+
+        function snapshotItemsByIds(ids){
+            return (ids || []).map(id => {
+                const el = S.find(s => s.id === id);
+                return el ? { id, startX: el.x, startY: el.y } : null;
+            }).filter(Boolean);
+        }
+
+        function refreshGroupBoundsForItems(items){
+            const seen = new Set();
+            (items || []).forEach(it => {
+                const g = getGroupForElement(it.id);
+                if(!g || seen.has(g.id)) return;
+                seen.add(g.id);
+                g.bounds = getGroupBounds(g.elementIds);
+            });
+        }
+
         function isUnconstrainedPointer(e){
             return !!(e && (e.ctrlKey || e.metaKey));
         }
@@ -1256,6 +1371,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                             .label-element{page-break-inside:avoid!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
                         .label-element.selected{border:1px solid transparent!important;box-shadow:none!important}
                         .resize-handle{display:none!important}
+                        .group-bounds-frame{display:none!important}
                             .label-element[style*="border"]{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
                         img.qr-code-img{image-rendering:pixelated!important;-webkit-image-rendering:pixelated!important}
                     }
@@ -1822,12 +1938,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
             stack.historyIndex--;
             const snap = stack.history[stack.historyIndex];
         S = deepCopy(snap.data);
-        selectedIds = deepCopy(snap.sel);
             groups = snap.groups ? deepCopy(snap.groups) : [];
             // Recalculate group bounds after undo
             groups.forEach(group => {
                 group.bounds = getGroupBounds(group.elementIds);
             });
+        selectedIds = expandIdsWithGroups(deepCopy(snap.sel));
         render();
         updateProps();
         updateBtns();
@@ -1841,12 +1957,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
             stack.historyIndex++;
             const snap = stack.history[stack.historyIndex];
         S = deepCopy(snap.data);
-        selectedIds = deepCopy(snap.sel);
             groups = snap.groups ? deepCopy(snap.groups) : [];
             // Recalculate group bounds after redo
             groups.forEach(group => {
                 group.bounds = getGroupBounds(group.elementIds);
             });
+        selectedIds = expandIdsWithGroups(deepCopy(snap.sel));
         render();
         updateProps();
         updateBtns();
@@ -1927,10 +2043,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
             base.props.textOutline2Enabled = !!base.props.textOutline2Enabled;
         }
 
-        base.x = Number(base.x) || 0;
-        base.y = Number(base.y) || 0;
-        base.width = Number(base.width) || 1;
-        base.height = Number(base.height) || 1;
+        base.x = finiteNumber(base.x, 0);
+        base.y = finiteNumber(base.y, 0);
+        base.width = finiteNumber(base.width, 1);
+        base.height = finiteNumber(base.height, 1);
         base.zIndex = Number(base.zIndex) || 0;
         base.lockAspectRatio = !!base.lockAspectRatio;
         base.props.fontSize = Number(base.props.fontSize) || 16;
@@ -2301,10 +2417,28 @@ document.addEventListener('DOMContentLoaded', ()=>{
     function isPointInResizeHandleZone(el, x, y){
         if(!el) return false;
         const local = worldToLocalPoint(el, x, y);
-        const handleCm = 0.55;
+        const handleHalfCm = 6 / PIXELS_PER_CM;
         const right = el.x + el.width;
         const bottom = el.y + el.height;
-        return local.x >= right - handleCm && local.x <= right + 0.15 && local.y >= bottom - handleCm && local.y <= bottom + 0.15;
+        return local.x >= right - handleHalfCm && local.x <= right + handleHalfCm && local.y >= bottom - handleHalfCm && local.y <= bottom + handleHalfCm;
+    }
+
+    function isPointInAabbResizeHandleZone(bounds, x, y){
+        if(!bounds) return false;
+        const handleHalfCm = 6 / PIXELS_PER_CM;
+        const right = bounds.x + bounds.width;
+        const bottom = bounds.y + bounds.height;
+        return x >= right - handleHalfCm && x <= right + handleHalfCm && y >= bottom - handleHalfCm && y <= bottom + handleHalfCm;
+    }
+
+    function fullySelectedGroupAtHandle(x, y){
+        for(let i = 0; i < groups.length; i++){
+            const g = groups[i];
+            if(!g || !g.elementIds || !g.elementIds.length) continue;
+            if(!g.elementIds.every(eid => selectedIds.includes(eid))) continue;
+            if(isPointInAabbResizeHandleZone(getGroupBounds(g.elementIds), x, y)) return g;
+        }
+        return null;
     }
 
     // ---------- Rendering ----------
@@ -2500,7 +2634,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 }
                 case 'line':
                     d.style.backgroundColor = el.props.color || '#000000';
-                    d.style.height = `${el.props.thickness || 2}px`;
+                    d.style.height = `${lineThicknessPx(el)}px`;
                     d.style.width = `${el.width}cm`;
                         d.style.border = 'none'; // No border for lines - thickness controls height
                     break;
@@ -2736,35 +2870,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
                         d.classList.add('synchronized-selected');
                     }
                     const group = getGroupForElement(el.id);
-                    
-                    // Show resize handle for groups when all group elements are selected
                     if(group){
                         const allGroupSelected = group.elementIds.every(id => selectedIds.includes(id));
-                        if(allGroupSelected){
-                            // Show resize handle on the element that's at the bottom-right of the group
-                            const groupBounds = getGroupBounds(group.elementIds);
-                            // Find element closest to bottom-right corner
-                            let maxDistance = -1;
-                            let bottomRightElement = null;
-                            group.elementIds.forEach(eid => {
-                                const elem = S.find(e => e.id === eid);
-                                if(elem){
-                                    const b = getEffectiveBounds(elem);
-                                    const distance = (b.x + b.width) + (b.y + b.height);
-                                    if(distance > maxDistance){
-                                        maxDistance = distance;
-                                        bottomRightElement = elem;
-                                    }
-                                }
-                            });
-                            // Show resize handle on the bottom-right element
-                            if(bottomRightElement && bottomRightElement.id === el.id){
-                                const h = document.createElement('div');
-                                h.classList.add('resize-handle', 'group-resize');
-                                h.title = 'Resize group (maintains proportions)';
-                                d.appendChild(h);
-                            }
-                        } else if(selectedIds.length === 1 && selectedIds[0] === el.id){
+                        if(!allGroupSelected && selectedIds.length === 1 && selectedIds[0] === el.id){
                             // Show resize handle if only this element is selected (will resize whole group)
                             const h = document.createElement('div');
                             h.classList.add('resize-handle', 'group-resize');
@@ -2788,6 +2896,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                         // Regular resize handle for non-grouped elements
                 const h = document.createElement('div');
                 h.classList.add('resize-handle');
+                h.title = 'Resize';
                 const inner = document.createElement('div');
                 inner.classList.add('resize-handle-inner');
                 h.appendChild(inner);
@@ -2806,6 +2915,28 @@ document.addEventListener('DOMContentLoaded', ()=>{
         // Sequence mode is used only for printing, not for canvas preview
         // Show only the canvas that the user is currently working on
         renderElementsForCanvas(S, 1, 0);
+        groups.forEach(group => {
+            if(!group || !group.elementIds || !group.elementIds.length) return;
+            if(!group.elementIds.every(id => selectedIds.includes(id))) return;
+            const b = getGroupBounds(group.elementIds);
+            if(!b || !(b.width > 0) || !(b.height > 0)) return;
+            const frame = document.createElement('div');
+            frame.className = 'group-bounds-frame';
+            frame.dataset.groupId = group.id;
+            frame.style.left = b.x + 'cm';
+            frame.style.top = b.y + 'cm';
+            frame.style.width = b.width + 'cm';
+            frame.style.height = b.height + 'cm';
+            const h = document.createElement('div');
+            h.classList.add('resize-handle', 'group-resize');
+            h.dataset.groupId = group.id;
+            h.title = 'Resize group (maintains proportions)';
+            const inner = document.createElement('div');
+            inner.classList.add('resize-handle-inner');
+            h.appendChild(inner);
+            frame.appendChild(h);
+            lc.appendChild(frame);
+        });
         // Reset container height to single label height
         lc.style.height = `${H}cm`;
         updateLayerStackIndicator();
@@ -3739,6 +3870,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     function mergeRegexRuleStyles(rulesInListOrder){
         const merged = {
             fontWeight: null,
+            fontFamily: null,
             italic: false,
             underline: false,
             fontSize: null,
@@ -3752,6 +3884,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         rulesInListOrder.forEach(rule => {
             if(!rule) return;
             if(rule.fontWeight && rule.fontWeight !== 'inherit') merged.fontWeight = rule.fontWeight;
+            if(rule.fontFamily && rule.fontFamily !== 'inherit') merged.fontFamily = rule.fontFamily;
             if(rule.italic) merged.italic = true;
             if(rule.underline) merged.underline = true;
             if(rule.fontSize !== '' && rule.fontSize !== undefined && rule.fontSize !== null && rule.fontSize !== 'inherit'){
@@ -3776,6 +3909,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     function mergedRegexStylesToCss(merged){
         const styles = [];
         if(merged.fontWeight) styles.push(`font-weight: ${merged.fontWeight}`);
+        if(merged.fontFamily) styles.push(`font-family: ${merged.fontFamily}`);
         if(merged.italic) styles.push('font-style: italic');
         if(merged.underline) styles.push('text-decoration: underline');
         if(merged.fontSize !== null && merged.fontSize !== '') styles.push(`font-size: ${merged.fontSize}px`);
@@ -4066,13 +4200,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
     function setSelection(ids, append=false){
         if(!Array.isArray(ids)) ids = ids ? [ids] : [];
         if(append){
-            ids.forEach(id=>{
-                const i = selectedIds.indexOf(id);
-                if(i===-1) selectedIds.push(id);
-                else selectedIds.splice(i,1);
-            });
+            uniqueAtomicUnits(ids).forEach(unit => toggleAtomicUnitInList(unit));
         } else {
-            selectedIds = ids;
+            selectedIds = expandIdsWithGroups(ids);
         }
         render();
         updateProps();
@@ -4080,9 +4210,15 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }
 
     function toggleSelection(id){
-        const i = selectedIds.indexOf(id);
-        if(i===-1) selectedIds.push(id);
-        else selectedIds.splice(i,1);
+        const unit = expandIdsWithGroups([id]);
+        if(selectedIds.includes(id)){
+            const drop = new Set(unit);
+            selectedIds = selectedIds.filter(eid => !drop.has(eid));
+        } else {
+            unit.forEach(eid => {
+                if(!selectedIds.includes(eid)) selectedIds.push(eid);
+            });
+        }
         render();
         updateProps();
         updateBtns();
@@ -4262,7 +4398,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                         }
                         
                         // Get current input value if it exists and user was editing
-                        let inputValue = (currentScale * 100).toFixed(1);
+                        let inputValue = String(Math.round(currentScale * 100));
                         if(existingInput && !isInputFocused){
                             // If input exists but not focused, use its value if it's valid
                             const existingValue = parseFloat(existingInput.value);
@@ -4277,7 +4413,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                             </div>
                             <div class="prop-grid" style="margin-bottom:12px;">
                                 <label>Scale (%)</label>
-                                <input type="number" id="group-scale-input" step="0.1" min="10" max="500" value="${inputValue}" style="width:100%">
+                                <input type="number" id="group-scale-input" step="1" min="10" max="500" value="${inputValue}" style="width:100%">
                             </div>
                             <div style="font-size:12px;color:#666;margin-top:8px;">
                                 <p style="margin:4px 0;">Use <strong>Ctrl+Shift+G</strong> to ungroup</p>
@@ -4310,7 +4446,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                                                 const originalBounds = group.originalBounds || currentBounds;
                                                 const currentScale = originalBounds.width > 0 ? (currentBounds.width / originalBounds.width) : 1;
                                                 if(document.activeElement !== scaleInput){
-                                                    scaleInput.value = (currentScale * 100).toFixed(1);
+                                                    scaleInput.value = String(Math.round(currentScale * 100));
                                                 }
                                             }, 50);
                                         }
@@ -4341,7 +4477,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                                         const currentBounds = getGroupBounds(group.elementIds);
                                         const originalBounds = group.originalBounds || currentBounds;
                                         const currentScale = originalBounds.width > 0 ? (currentBounds.width / originalBounds.width) : 1;
-                                        scaleInput.value = (currentScale * 100).toFixed(1);
+                                        scaleInput.value = String(Math.round(currentScale * 100));
                                         isManuallyEditingGroupScale = false;
                                     }
                                 });
@@ -4639,6 +4775,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 el.props.regexRules.forEach((rule, index) => {
                     const pkPattern = `props.regexRules.${index}.pattern`;
                     const pkFontWeight = `props.regexRules.${index}.fontWeight`;
+                    const pkFontFamily = `props.regexRules.${index}.fontFamily`;
                     const pkFontSize = `props.regexRules.${index}.fontSize`;
                     const pkLineHeight = `props.regexRules.${index}.lineHeight`;
                     const pkLetterSpacing = `props.regexRules.${index}.letterSpacing`;
@@ -4650,6 +4787,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     const pkPaddingRight = `props.regexRules.${index}.paddingRight`;
                     const patternVal = valueFor(pkPattern);
                     const weightVal = valueFor(pkFontWeight);
+                    const familyVal = valueFor(pkFontFamily);
                     const sizeVal = valueFor(pkFontSize);
                     const lhVal = valueFor(pkLineHeight);
                     const lsVal = valueFor(pkLetterSpacing);
@@ -4684,6 +4822,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     regexBlockBody += `<option value="800" ${weightVal === '800' ? 'selected' : ''}>800</option>`;
                     regexBlockBody += `<option value="900" ${weightVal === '900' ? 'selected' : ''}>900</option>`;
                     regexBlockBody += `</select>${syncBtn(pkFontWeight)}</div>`;
+                    regexBlockBody += `<div class="${grid1Cls}"><label class="${labelClass(pkFontFamily)}">Font Family</label><select class="regex-font-family-select" data-rule-index="${index}" style="font-size:12px;padding:4px">${generateRegexFontFamilyOptions(familyVal)}</select>${syncBtn(pkFontFamily)}</div>`;
                     regexBlockBody += `<div class="${grid1Cls}"><label class="${labelClass(pkFontSize)}">Font Size</label><input type="number" class="regex-size-input" data-rule-index="${index}" placeholder="inherit" value="${sizeVal !== undefined && sizeVal !== '' ? sizeVal : ''}" min="6" max="200" step="1" style="font-size:12px;padding:4px">${syncBtn(pkFontSize)}</div>`;
                     regexBlockBody += `<div class="${grid1Cls}"><label class="${labelClass(pkLineHeight)}">Line Height</label><input type="number" class="regex-line-height-input" data-rule-index="${index}" placeholder="inherit" value="${lhVal !== undefined && lhVal !== '' ? lhVal : ''}" min="0.5" max="3" step="0.1" style="font-size:12px;padding:4px">${syncBtn(pkLineHeight)}</div>`;
                     regexBlockBody += `<div class="${grid1Cls}"><label class="${labelClass(pkLetterSpacing)}">Letter spacing (px)</label><input type="number" class="regex-letter-spacing-input" data-rule-index="${index}" placeholder="inherit" value="${lsVal !== undefined && lsVal !== '' ? lsVal : ''}" step="0.1" style="font-size:12px;padding:4px">${syncBtn(pkLetterSpacing)}</div>`;
@@ -4969,6 +5108,22 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     });
                 });
                 
+                pp.querySelectorAll('.regex-font-family-select').forEach(select => {
+                    select.addEventListener('change', function(){
+                        const index = parseInt(this.dataset.ruleIndex);
+                        if(!el.props.regexRules) el.props.regexRules = [];
+                        if(!el.props.regexRules[index]) return;
+                        el.props.regexRules[index].fontFamily = this.value;
+                        render();
+                        saveCurrentDesign();
+                        const propKey = `props.regexRules.${index}.fontFamily`;
+                        if(el.masterThreadId){
+                            const t = getMasterThread(el.masterThreadId);
+                            if(t && isPropSynced(t, propKey)) syncPropertyToThread(el.masterThreadId, propKey, this.value);
+                        }
+                    });
+                });
+                
                 pp.querySelectorAll('.regex-size-input').forEach(input => {
                     input.addEventListener('input', function(){
                         const index = parseInt(this.dataset.ruleIndex);
@@ -5136,49 +5291,129 @@ document.addEventListener('DOMContentLoaded', ()=>{
             return val === undefined ? '' : val;
         }
 
-            const commonFontFamily = common('props.fontFamily') || 'Arial, sans-serif';
-            const commonWeight = common('props.fontWeight') || 'normal';
-        let h = `<div style="font-weight:600;margin-bottom:6px">${elems.length} elements selected</div>`;
-            h += `<div class="prop-grid"><label>X</label><input type="number" step="0.01" data-prop="multi.x" value="${common('x')}"><label>Y</label><input type="number" step="0.01" data-prop="multi.y" value="${common('y')}"></div>`;
-            const allLockedAspect = elems.length > 0 && elems.every(e => e.lockAspectRatio);
-            h += `<div class="prop-grid"><label>Width</label><input type="number" step="0.01" data-prop="multi.width" value="${common('width')}"></div>`;
-            h += `<div class="prop-grid"><label>Height</label><div style="display:flex;align-items:center;gap:8px;min-width:0"><input type="number" step="0.01" data-prop="multi.height" value="${common('height')}" style="flex:1;min-width:0"><button type="button" class="prop-aspect-link-btn ${allLockedAspect ? 'active' : ''}" id="multi-prop-aspect-link-toggle" title="Blocca/sblocca proporzioni su tutti gli elementi selezionati">🔗</button></div></div><hr>`;
-                h += `<div class="prop-grid"><label>Font Size</label><input type="number" step="0.1" data-prop="multi.props.fontSize" value="${common('props.fontSize')}" min="6"><label>Font Family</label><div style="display:flex;gap:4px;align-items:center"><select data-prop="multi.props.fontFamily" id="multi-font-family-select" style="flex:1">${generateFontOptions(commonFontFamily)}</select><button type="button" id="multi-font-favorite-btn" style="padding:4px 8px;font-size:16px;background:transparent;border:1px solid #ccc;border-radius:4px;cursor:pointer;flex-shrink:0" title="${fontFavorites.includes(commonFontFamily) ? 'Remove from favorites' : 'Add to favorites'}">${fontFavorites.includes(commonFontFamily) ? '⭐' : '☆'}</button></div></div>`;
-            h += `<div class="prop-grid"><label>Font Weight</label><select data-prop="multi.props.fontWeight" id="multi-font-weight-select">${generateWeightOptions(commonFontFamily, commonWeight)}</select><label>Line Height</label><input type="number" step="0.1" data-prop="multi.props.lineHeight" value="${common('props.lineHeight')}" min="0.5" max="3"></div>`;
+        const hasTextOrData = elems.some(el => el.type === 'text' || el.type === 'data');
+        const hasImageElement = elems.some(el => el.type === 'image');
+        const hasTextDataOrImage = hasTextOrData || hasImageElement;
+        const hasDataElement = elems.some(el => el.type === 'data');
+        const hasBoxElement = elems.some(el => el.type === 'box');
+        const needsExtraColor = elems.some(el => el.type !== 'box' && el.type !== 'text' && el.type !== 'data');
+        const commonFontFamily = common('props.fontFamily') || 'Arial, sans-serif';
+        const commonWeight = common('props.fontWeight') || 'normal';
+        const allLockedAspect = elems.length > 0 && elems.every(e => e.lockAspectRatio);
+        const showBorderVal = !!common('props.showBorder');
+        const overflowVal = common('props.textOverflow');
+
+        let h = `<div class="prop-block-title" style="margin-bottom:8px">${elems.length} elements selected</div>`;
+        h += `<div class="prop-grid"><label>X</label><input type="number" step="0.01" data-prop="multi.x" value="${common('x')}"></div>`;
+        h += `<div class="prop-grid"><label>Y</label><input type="number" step="0.01" data-prop="multi.y" value="${common('y')}"></div>`;
+        h += `<div class="prop-grid"><label>Width</label><input type="number" step="0.01" data-prop="multi.width" value="${common('width')}"></div>`;
+        h += `<div class="prop-grid"><label>Height</label><div style="display:flex;align-items:center;gap:8px;min-width:0"><input type="number" step="0.01" data-prop="multi.height" value="${common('height')}" style="flex:1;min-width:0"><button type="button" class="prop-aspect-link-btn ${allLockedAspect ? 'active' : ''}" id="multi-prop-aspect-link-toggle" title="Blocca/sblocca proporzioni su tutti gli elementi selezionati">🔗</button></div></div><hr>`;
+
+        if(hasTextOrData){
+            h += `<div class="prop-grid"><label>Font Size</label><input type="number" step="0.1" data-prop="multi.props.fontSize" value="${common('props.fontSize')}" min="6"></div>`;
+            h += `<div class="prop-grid"><label>Font Family</label><div style="display:flex;gap:4px;align-items:center;min-width:0"><select data-prop="multi.props.fontFamily" id="multi-font-family-select" style="flex:1;min-width:0">${generateFontOptions(commonFontFamily)}</select><button type="button" id="multi-font-favorite-btn" style="padding:4px 8px;font-size:16px;background:transparent;border:1px solid #ccc;border-radius:4px;cursor:pointer;flex-shrink:0" title="${fontFavorites.includes(commonFontFamily) ? 'Remove from favorites' : 'Add to favorites'}">${fontFavorites.includes(commonFontFamily) ? '⭐' : '☆'}</button></div></div>`;
+            h += `<div class="prop-grid"><label>Weight</label><select data-prop="multi.props.fontWeight" id="multi-font-weight-select">${generateWeightOptions(commonFontFamily, commonWeight)}</select></div>`;
+            h += `<div class="prop-grid"><label>Line Height</label><input type="number" step="0.1" data-prop="multi.props.lineHeight" value="${common('props.lineHeight')}" min="0.5" max="3"></div>`;
             h += `<div class="prop-grid"><label>Letter spacing (px)</label><input type="number" step="0.1" data-prop="multi.props.letterSpacing" value="${common('props.letterSpacing')}"></div>`;
-            h += `<div class="prop-grid"><label>H. Align</label><select data-prop="multi.props.textAlign"><option value="">—</option><option value="left" ${common('props.textAlign')==='left'?'selected':''}>Left</option><option value="center" ${common('props.textAlign')==='center'?'selected':''}>Center</option><option value="right" ${common('props.textAlign')==='right'?'selected':''}>Right</option></select><label>V. Align</label><select data-prop="multi.props.valign"><option value="">—</option><option value="top" ${common('props.valign')==='top'?'selected':''}>Top</option><option value="middle" ${common('props.valign')==='middle'?'selected':''}>Middle</option><option value="bottom" ${common('props.valign')==='bottom'?'selected':''}>Bottom</option></select></div>`;
-            const hasTextOrData = elems.some(el => el.type === 'text' || el.type === 'data');
-            if(hasTextOrData){
-                h += `<div class="prop-grid"><label>Overflow</label><select data-prop="multi.props.textOverflow"><option value="">—</option><option value="clip" ${(common('props.textOverflow')||'clip')==='clip'?'selected':''}>Clip (default)</option><option value="auto-scale" ${common('props.textOverflow')==='auto-scale'?'selected':''}>Auto-scale to fit</option><option value="squeeze" ${common('props.textOverflow')==='squeeze'?'selected':''}>Horizontal squeeze</option></select><label></label></div>`;
+            h += `<div class="prop-grid"><label>Colore</label><input type="color" data-prop="multi.props.color" value="${common('props.color')||'#000000'}"></div>`;
+            h += `<div class="prop-grid"><label>H. Align</label><select data-prop="multi.props.textAlign"><option value="">—</option><option value="left" ${common('props.textAlign')==='left'?'selected':''}>Left</option><option value="center" ${common('props.textAlign')==='center'?'selected':''}>Center</option><option value="right" ${common('props.textAlign')==='right'?'selected':''}>Right</option></select></div>`;
+            h += `<div class="prop-grid"><label>V. Align</label><select data-prop="multi.props.valign"><option value="">—</option><option value="top" ${common('props.valign')==='top'?'selected':''}>Top</option><option value="middle" ${common('props.valign')==='middle'?'selected':''}>Middle</option><option value="bottom" ${common('props.valign')==='bottom'?'selected':''}>Bottom</option></select></div>`;
+            h += `<div class="prop-grid"><label>Overflow</label><select data-prop="multi.props.textOverflow"><option value="">—</option><option value="clip" ${(overflowVal||'clip')==='clip'?'selected':''}>Clip (default)</option><option value="auto-scale" ${overflowVal==='auto-scale'?'selected':''}>Auto-scale to fit</option><option value="squeeze" ${overflowVal==='squeeze'?'selected':''}>Horizontal squeeze</option></select></div>`;
+            if(overflowVal && overflowVal !== 'clip'){
+                const fmtChecked = common('props.textOverflowFormattedMeasure') !== false;
+                h += `<div class="prop-grid overflow-measure-row"><label title="Attivo: misura con clone DOM (regex, grassetto, italic, ecc.). Spento: misura legacy solo testo piano.">Misura regex</label><label class="prop-feature-switch" title="Misura formattata (clone DOM)"><input type="checkbox" data-prop="multi.props.textOverflowFormattedMeasure" ${fmtChecked ? 'checked' : ''}><span class="prop-feature-switch-ui"></span></label></div>`;
             }
-            // Show decimals only if at least one element is of type 'data'
-            const hasDataElement = elems.some(el => el.type === 'data');
-            if(hasDataElement){
-                    h += `<hr><div class="prop-grid"><label>Decimals</label><input type="number" step="1" data-prop="multi.props.decimals" value="${common('props.decimals')!==''?common('props.decimals'):2}" min="0" max="6" inputmode="numeric"><label>As Percent</label><input type="checkbox" data-prop="multi.props.asPercent" ${common('props.asPercent')?'checked':''}></div>`;
-                }
-                // Show box controls only if at least one element is of type 'box'
-                const hasBoxElement = elems.some(el => el.type === 'box');
-                if(hasBoxElement){
-                    h += `<hr><div class="prop-grid"><label>Fill Color</label><input type="color" data-prop="multi.props.fillColor" value="${(common('props.fillColor')&&common('props.fillColor')!=='transparent')?common('props.fillColor'):'#ffffff'}"><label></label></div>`;
-            }
-            h += `<div class="prop-grid"><label>Padding Top</label><input type="number" step="0.01" data-prop="multi.props.paddingTop" value="${common('props.paddingTop')}" min="0"><label>Padding Right</label><input type="number" step="0.01" data-prop="multi.props.paddingRight" value="${common('props.paddingRight')}" min="0"></div>`;
-            h += `<div class="prop-grid"><label>Padding Bottom</label><input type="number" step="0.01" data-prop="multi.props.paddingBottom" value="${common('props.paddingBottom')}" min="0"><label>Padding Left</label><input type="number" step="0.01" data-prop="multi.props.paddingLeft" value="${common('props.paddingLeft')}" min="0"></div>`;
-                h += `<hr><div class="prop-grid"><label>Rotation°</label><div style="display:flex;align-items:center;gap:8px;min-width:0"><input type="number" step="1" data-prop="multi.props.rotation" value="${common('props.rotation')}" style="flex:1;min-width:0"><button type="button" class="prop-rotate-90-btn" title="+90° (Shift: −90°)">↻</button></div><label>Show Border</label><input type="checkbox" data-prop="multi.props.showBorder" ${common('props.showBorder')?'checked':''}></div>`;
-            h += `<div class="prop-grid"><label>Border Color</label><input type="color" data-prop="multi.props.borderColor" value="${common('props.borderColor')||'#000000'}"><label>Border Width</label><input type="number" step="0.1" data-prop="multi.props.borderWidth" value="${common('props.borderWidth')}" min="0"></div>`;
-            if(common('props.showBorder')){
-                h += `<div class="prop-grid" style="margin-top:8px"><label style="font-size:12px">Border Sides:</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:4px"><label style="font-size:12px;font-weight:normal;display:flex;align-items:center;gap:4px"><input type="checkbox" data-prop="multi.props.borderTop" ${common('props.borderTop')!==false?'checked':''}>Top</label><label style="font-size:12px;font-weight:normal;display:flex;align-items:center;gap:4px"><input type="checkbox" data-prop="multi.props.borderRight" ${common('props.borderRight')!==false?'checked':''}>Right</label><label style="font-size:12px;font-weight:normal;display:flex;align-items:center;gap:4px"><input type="checkbox" data-prop="multi.props.borderBottom" ${common('props.borderBottom')!==false?'checked':''}>Bottom</label><label style="font-size:12px;font-weight:normal;display:flex;align-items:center;gap:4px"><input type="checkbox" data-prop="multi.props.borderLeft" ${common('props.borderLeft')!==false?'checked':''}>Left</label></div></div>`;
-            }
-            if(common('props.showBorder') || hasBoxElement){
-                h += `<div style="margin-top:8px"><label style="font-size:12px;display:block;margin-bottom:6px">Border Radius (px):</label><div class="prop-border-radius-grid"><div class="prop-border-radius-cell"><label>↖ Top Left</label><input type="number" data-prop="multi.props.borderRadiusTopLeft" value="${common('props.borderRadiusTopLeft')||0}" min="0" step="0.1"></div><div class="prop-border-radius-cell"><label>↗ Top Right</label><input type="number" data-prop="multi.props.borderRadiusTopRight" value="${common('props.borderRadiusTopRight')||0}" min="0" step="0.1"></div><div class="prop-border-radius-cell"><label>↙ Bottom Left</label><input type="number" data-prop="multi.props.borderRadiusBottomLeft" value="${common('props.borderRadiusBottomLeft')||0}" min="0" step="0.1"></div><div class="prop-border-radius-cell"><label>↘ Bottom Right</label><input type="number" data-prop="multi.props.borderRadiusBottomRight" value="${common('props.borderRadiusBottomRight')||0}" min="0" step="0.1"></div></div></div>`;
-            }
-            // Show general color only if not all elements are boxes (boxes have their own color controls)
-            const allBoxes = elems.every(el => el.type === 'box');
-            if(!allBoxes){
-        h += `<div class="prop-grid"><label>Color</label><input type="color" data-prop="multi.props.color" value="${common('props.color')||'#000000'}"><label></label></div>`;
-            }
+        }
+
+        if(hasDataElement){
+            h += `<hr><div class="prop-grid"><label>Decimals</label><input type="number" step="1" data-prop="multi.props.decimals" value="${common('props.decimals')!==''?common('props.decimals'):2}" min="0" max="6" inputmode="numeric"></div>`;
+            h += `<div class="prop-grid"><label>As Percent</label><input type="checkbox" data-prop="multi.props.asPercent" ${common('props.asPercent')?'checked':''}></div>`;
+        }
+
+        if(hasBoxElement){
+            const fillEnabledVal = !!common('props.fillEnabled');
+            const fillHex = boxFillColorStored({ fillColor: common('props.fillColor') });
+            h += propFeatureBlock('Riempimento', { checked: fillEnabledVal, dataProp: 'multi.props.fillEnabled' },
+                `<div class="prop-feature-row-color"><label>Colore</label><input type="color" class="fill-color-input" data-prop="multi.props.fillColor" value="${fillHex}"></div>`);
+        }
+
+        h += `<hr><div class="prop-grid"><label>Padding Top</label><input type="number" step="0.01" data-prop="multi.props.paddingTop" value="${common('props.paddingTop')}" min="0"></div>`;
+        h += `<div class="prop-grid"><label>Padding Right</label><input type="number" step="0.01" data-prop="multi.props.paddingRight" value="${common('props.paddingRight')}" min="0"></div>`;
+        h += `<div class="prop-grid"><label>Padding Bottom</label><input type="number" step="0.01" data-prop="multi.props.paddingBottom" value="${common('props.paddingBottom')}" min="0"></div>`;
+        h += `<div class="prop-grid"><label>Padding Left</label><input type="number" step="0.01" data-prop="multi.props.paddingLeft" value="${common('props.paddingLeft')}" min="0"></div>`;
+        h += `<div class="prop-grid"><label>Rotation°</label><div style="display:flex;align-items:center;gap:8px;min-width:0"><input type="number" step="1" data-prop="multi.props.rotation" value="${common('props.rotation')}" style="flex:1;min-width:0"><button type="button" class="prop-rotate-90-btn" title="+90° (Shift: −90°)">↻</button></div></div>`;
+
+        let borderBody = `<div class="prop-feature-row-color"><label>Colore</label><input type="color" data-prop="multi.props.borderColor" value="${common('props.borderColor')||'#000000'}"></div>`;
+        borderBody += `<div class="prop-grid"><label>Spessore</label><input type="number" step="0.1" data-prop="multi.props.borderWidth" value="${common('props.borderWidth')}" min="0"></div>`;
+        if(showBorderVal){
+            borderBody += `<div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px">Lati</label><div class="prop-border-sides" style="grid-template-columns:1fr 1fr">`;
+            borderBody += `<label><input type="checkbox" data-prop="multi.props.borderTop" ${common('props.borderTop')!==false?'checked':''}> Top</label><label><input type="checkbox" data-prop="multi.props.borderRight" ${common('props.borderRight')!==false?'checked':''}> Right</label>`;
+            borderBody += `<label><input type="checkbox" data-prop="multi.props.borderBottom" ${common('props.borderBottom')!==false?'checked':''}> Bottom</label><label><input type="checkbox" data-prop="multi.props.borderLeft" ${common('props.borderLeft')!==false?'checked':''}> Left</label>`;
+            borderBody += `</div></div>`;
+        }
+        if(showBorderVal || hasBoxElement){
+            borderBody += `<div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px">Angoli (px)</label><div class="prop-border-radius-grid">`;
+            borderBody += `<div class="prop-border-radius-cell"><label>↖ Top Left</label><input type="number" data-prop="multi.props.borderRadiusTopLeft" value="${common('props.borderRadiusTopLeft')||0}" min="0" step="0.1"></div>`;
+            borderBody += `<div class="prop-border-radius-cell"><label>↗ Top Right</label><input type="number" data-prop="multi.props.borderRadiusTopRight" value="${common('props.borderRadiusTopRight')||0}" min="0" step="0.1"></div>`;
+            borderBody += `<div class="prop-border-radius-cell"><label>↙ Bottom Left</label><input type="number" data-prop="multi.props.borderRadiusBottomLeft" value="${common('props.borderRadiusBottomLeft')||0}" min="0" step="0.1"></div>`;
+            borderBody += `<div class="prop-border-radius-cell"><label>↘ Bottom Right</label><input type="number" data-prop="multi.props.borderRadiusBottomRight" value="${common('props.borderRadiusBottomRight')||0}" min="0" step="0.1"></div>`;
+            borderBody += `</div></div>`;
+        }
+        h += propFeatureBlock('Bordo', { checked: showBorderVal, dataProp: 'multi.props.showBorder' }, borderBody);
+
+        if(needsExtraColor){
+            h += `<hr><div class="prop-grid"><label>Colore</label><input type="color" data-prop="multi.props.color" value="${common('props.color')||'#000000'}"></div>`;
+        }
+
+        if(hasTextDataOrImage){
+            const bgCommon = common('props.backgroundColor');
+            const hasBg = !!(bgCommon && bgCommon !== 'transparent');
+            const bgHex = /^#[0-9A-Fa-f]{6}$/.test(String(bgCommon || '')) ? String(bgCommon) : '#ffffff';
+            h += propFeatureBlock('Sfondo', { checked: hasBg, checkboxClass: 'enable-background-cb' },
+                `<div class="prop-feature-row-color"><label>Colore</label><input type="color" class="background-color-input" data-prop="multi.props.backgroundColor" value="${bgHex}"></div>`);
+
+            const outlineW = common('props.textOutlineWidth');
+            const outlineColorRaw = common('props.textOutlineColor');
+            const outlineColor = /^#[0-9A-Fa-f]{6}$/.test(String(outlineColorRaw)) ? String(outlineColorRaw) : '#000000';
+            const outline2W = common('props.textOutline2Width');
+            const outline2ColorRaw = common('props.textOutline2Color');
+            const outline2Color = /^#[0-9A-Fa-f]{6}$/.test(String(outline2ColorRaw)) ? String(outline2ColorRaw) : '#ffffff';
+            const outlineEnabled = !!common('props.textOutlineEnabled');
+            const outline2Enabled = !!common('props.textOutline2Enabled');
+            const outlineBlockTitle = hasTextOrData ? 'Contorno testo' : 'Contorno';
+            let outlineBody = `<div class="prop-feature-row-num"><label>Spessore</label><input type="number" data-prop="multi.props.textOutlineWidth" value="${outlineW}" min="0" max="20" step="0.1"><span>px</span></div>`;
+            outlineBody += `<div class="prop-feature-row-color"><label>Colore</label><input type="color" data-prop="multi.props.textOutlineColor" value="${outlineColor}"></div>`;
+            const shadowBody = `<div class="prop-feature-row-num"><label>Spessore</label><input type="number" data-prop="multi.props.textOutline2Width" value="${outline2W}" min="0" max="20" step="0.1"><span>px</span></div>` +
+                `<div class="prop-feature-row-color"><label>Colore</label><input type="color" data-prop="multi.props.textOutline2Color" value="${outline2Color}"></div>`;
+            outlineBody += `<div class="prop-feature-nested">${propFeatureBlock('Ombra secondaria', { checked: outline2Enabled, dataProp: 'multi.props.textOutline2Enabled', disabled: !outlineEnabled }, shadowBody)}</div>`;
+            h += propFeatureBlock(outlineBlockTitle, { checked: outlineEnabled, dataProp: 'multi.props.textOutlineEnabled' }, outlineBody);
+        }
+
         h += `<hr><button id="btn-delete">Delete Selected</button>`;
         pp.innerHTML = h;
-            bindRotationNudgeButtons(pp, () => elems);
+        bindRotationNudgeButtons(pp, () => elems);
+
+        const enableBgCb = pp.querySelector('.enable-background-cb');
+        const bgInput = pp.querySelector('.background-color-input');
+        if(enableBgCb){
+            enableBgCb.addEventListener('change', function(){
+                const body = this.closest('.prop-feature') && this.closest('.prop-feature').querySelector(':scope > .prop-feature-body');
+                pushBeforeChange();
+                elems.forEach(el => {
+                    if(el.type !== 'text' && el.type !== 'data' && el.type !== 'image') return;
+                    if(!el.props) el.props = {};
+                    if(this.checked){
+                        el.props.backgroundColor = (bgInput && bgInput.value) ? bgInput.value : '#ffffff';
+                    } else {
+                        el.props.backgroundColor = 'transparent';
+                    }
+                });
+                if(body) body.hidden = !this.checked;
+                render();
+                saveCurrentDesign();
+                updateProps();
+            });
+        }
             
             const multiAspectBtn = pp.querySelector('#multi-prop-aspect-link-toggle');
             if(multiAspectBtn && elems.length){
@@ -5809,6 +6044,66 @@ document.addEventListener('DOMContentLoaded', ()=>{
             return groups.find(g => g.elementIds.includes(elementId));
         }
 
+        function expandIdsWithGroups(ids){
+            const out = [];
+            const seen = new Set();
+            (ids || []).forEach(id => {
+                const g = getGroupForElement(id);
+                (g ? g.elementIds : [id]).forEach(eid => {
+                    if(seen.has(eid)) return;
+                    seen.add(eid);
+                    out.push(eid);
+                });
+            });
+            return out;
+        }
+
+        function uniqueAtomicUnits(ids){
+            const units = [];
+            const seenGroup = new Set();
+            const seenLoose = new Set();
+            (ids || []).forEach(id => {
+                const g = getGroupForElement(id);
+                if(g){
+                    if(seenGroup.has(g.id)) return;
+                    seenGroup.add(g.id);
+                    units.push(g.elementIds.slice());
+                } else if(!seenLoose.has(id)){
+                    seenLoose.add(id);
+                    units.push([id]);
+                }
+            });
+            return units;
+        }
+
+        function toggleAtomicUnitInList(unit){
+            const allIn = unit.every(eid => selectedIds.includes(eid));
+            if(allIn){
+                const drop = new Set(unit);
+                selectedIds = selectedIds.filter(eid => !drop.has(eid));
+            } else {
+                unit.forEach(eid => {
+                    if(!selectedIds.includes(eid)) selectedIds.push(eid);
+                });
+            }
+        }
+
+        function snapshotGroupElementStates(elementIds){
+            const snapshot = {};
+            elementIds.forEach(elementId => {
+                const el = S.find(e => e.id === elementId);
+                if(!el) return;
+                snapshot[elementId] = {
+                    x: el.x,
+                    y: el.y,
+                    width: el.width,
+                    height: el.height,
+                    props: deepCopy(el.props)
+                };
+            });
+            return snapshot;
+        }
+
         function getGroupBounds(elementIds){
             if(elementIds.length === 0) return null;
             const elements = elementIds.map(id => S.find(e => e.id === id)).filter(Boolean);
@@ -6041,7 +6336,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                         rotation: templateElement.props.rotation || 0,
                         showBorder: templateElement.props.showBorder || false,
                         borderColor: templateElement.props.borderColor || '#000000',
-                        borderWidth: templateElement.props.borderWidth || 1,
+                        borderWidth: finiteNumber(templateElement.props.borderWidth, 1),
                         paddingTop: templateElement.props.paddingTop || 0,
                         paddingRight: templateElement.props.paddingRight || 0,
                         paddingBottom: templateElement.props.paddingBottom || 0,
@@ -6140,7 +6435,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                         rotation: el.props.rotation || 0,
                         showBorder: el.props.showBorder || false,
                         borderColor: el.props.borderColor || '#000000',
-                        borderWidth: el.props.borderWidth || 1,
+                        borderWidth: finiteNumber(el.props.borderWidth, 1),
                         paddingTop: el.props.paddingTop || 0,
                         paddingRight: el.props.paddingRight || 0,
                         paddingBottom: el.props.paddingBottom || 0,
@@ -6175,7 +6470,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
             return true;
         }
 
-        const REGEX_RULE_FIELD_NAMES = 'pattern|fontWeight|fontSize|lineHeight|letterSpacing|italic|underline|enabled|paddingTop|paddingBottom|paddingLeft|paddingRight';
+        const REGEX_RULE_FIELD_NAMES = 'pattern|fontWeight|fontFamily|fontSize|lineHeight|letterSpacing|italic|underline|enabled|paddingTop|paddingBottom|paddingLeft|paddingRight';
         const REGEX_RULE_NUMERIC_FIELDS = new Set(['fontSize', 'lineHeight', 'letterSpacing', 'paddingTop', 'paddingBottom', 'paddingLeft', 'paddingRight']);
 
         function parseRegexRulePropKey(propKey){
@@ -6188,12 +6483,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
             return new RegExp('^props\\.regexRules\\.\\d+\\.(' + REGEX_RULE_FIELD_NAMES + ')$').test(String(propKey || ''));
         }
 
-        const REGEX_RULE_SYNC_FIELDS = ['pattern', 'fontWeight', 'fontSize', 'lineHeight', 'letterSpacing', 'italic', 'underline', 'enabled', 'paddingTop', 'paddingBottom', 'paddingLeft', 'paddingRight'];
+        const REGEX_RULE_SYNC_FIELDS = ['pattern', 'fontWeight', 'fontFamily', 'fontSize', 'lineHeight', 'letterSpacing', 'italic', 'underline', 'enabled', 'paddingTop', 'paddingBottom', 'paddingLeft', 'paddingRight'];
 
         function defaultRegexRule(order){
             return {
                 pattern: '',
                 fontWeight: 'inherit',
+                fontFamily: 'inherit',
                 italic: false,
                 underline: false,
                 fontSize: '',
@@ -7722,15 +8018,15 @@ document.addEventListener('DOMContentLoaded', ()=>{
                             const lineColor = el.props.color || '#000000';
                             d.style.background = lineColor;
                             d.style.backgroundColor = lineColor;
-                            d.style.height = `${el.props.thickness || 2}px`;
+                            d.style.height = `${lineThicknessPx(el)}px`;
                             d.style.width = `${el.width}cm`;
                             d.style.border = 'none';
                             d.style.display = 'block';
                             d.style.margin = '0';
                             d.style.padding = '0';
                             d.style.overflow = 'visible';
-                            d.style.minHeight = `${el.props.thickness || 2}px`;
-                            d.style.maxHeight = `${el.props.thickness || 2}px`;
+                            d.style.minHeight = `${lineThicknessPx(el)}px`;
+                            d.style.maxHeight = `${lineThicknessPx(el)}px`;
                             d.style.boxSizing = 'border-box';
                             // Force browsers to print background colors
                             d.style.printColorAdjust = 'exact';
@@ -8335,15 +8631,15 @@ document.addEventListener('DOMContentLoaded', ()=>{
                             const lineColor = el.props.color || '#000000';
                             d.style.background = lineColor;
                             d.style.backgroundColor = lineColor;
-                            d.style.height = `${el.props.thickness || 2}px`;
+                            d.style.height = `${lineThicknessPx(el)}px`;
                             d.style.width = `${el.width}cm`;
                             d.style.border = 'none';
                             d.style.display = 'block';
                             d.style.margin = '0';
                             d.style.padding = '0';
                             d.style.overflow = 'visible';
-                            d.style.minHeight = `${el.props.thickness || 2}px`;
-                            d.style.maxHeight = `${el.props.thickness || 2}px`;
+                            d.style.minHeight = `${lineThicknessPx(el)}px`;
+                            d.style.maxHeight = `${lineThicknessPx(el)}px`;
                             d.style.boxSizing = 'border-box';
                             // Force browsers to print background colors
                             d.style.printColorAdjust = 'exact';
@@ -8912,7 +9208,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     }
                     case 'line':
                         d.style.background = el.props.color || '#000000';
-                        d.style.height = `${el.props.thickness || 2}px`;
+                        d.style.height = `${lineThicknessPx(el)}px`;
                         d.style.width = `${el.width}cm`;
                         d.style.border = 'none';
                         break;
@@ -9218,6 +9514,18 @@ document.addEventListener('DOMContentLoaded', ()=>{
             e.preventDefault();
         }
 
+        function isCanvasObjectTarget(el){
+            if(!el || !el.closest) return false;
+            return !!(el.closest('.label-element') || el.closest('.resize-handle'));
+        }
+
+        function beginBackgroundPointer(e){
+            if(!(e.ctrlKey || e.metaKey) && selectedIds.length){
+                setSelection([]);
+            }
+            startMarqueeSelection(e);
+        }
+
         // Listen for mousedown on canvas-container (allows starting from outside canvas)
         cc.addEventListener('mousedown', (e)=>{
             // Disabilita interazioni quando non è in full screen
@@ -9242,11 +9550,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
             }, 0);
             
             const t = e.target;
-            // If clicking on the background (container or canvas), start marquee selection
-            if(t === cc || t === lc){
-                startMarqueeSelection(e);
-                return;
-            }
+            if(isCanvasObjectTarget(t)) return;
+            beginBackgroundPointer(e);
         });
 
         lc.addEventListener('mousedown', (e)=>{
@@ -9293,6 +9598,20 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     if(te){
                         id = te.dataset.id;
                         clickedElement = S.find(x => x.id === te.dataset.id);
+                    } else {
+                        const gid = resizeHost.dataset.groupId || (resizeHost.closest('.group-bounds-frame') && resizeHost.closest('.group-bounds-frame').dataset.groupId);
+                        const hitGroup = gid ? groups.find(g => g.id === gid) : null;
+                        if(hitGroup && hitGroup.elementIds && hitGroup.elementIds.length){
+                            id = hitGroup.elementIds[0];
+                            clickedElement = S.find(x => x.id === id);
+                        }
+                    }
+                }
+                if(!clickedElement){
+                    const handleGroup = fullySelectedGroupAtHandle(pt.x, pt.y);
+                    if(handleGroup && handleGroup.elementIds.length){
+                        id = handleGroup.elementIds[0];
+                        clickedElement = S.find(x => x.id === id);
                     }
                 }
                 if(!clickedElement){
@@ -9302,33 +9621,32 @@ document.addEventListener('DOMContentLoaded', ()=>{
             }
 
             if(!id){
-                if(t === lc || t === cc){
-                    startMarqueeSelection(e);
-                }
+                beginBackgroundPointer(e);
                 return;
             }
 
         // selection logic
+        const alreadySelected = selectedIds.includes(id);
         if(e.ctrlKey || e.metaKey){
-            if(!selectedIds.includes(id)){
+            if(!alreadySelected){
                 pushBeforeChange();
                 toggleSelection(id);
+            } else {
+                pendingSelectClick = { type: 'toggle-off', id };
             }
         } else {
-            if(!selectedIds.includes(id)){
+            if(!alreadySelected){
                 pushBeforeChange();
-                    // If element is in a group, select all elements in the group
-                    const group = getGroupForElement(id);
-                    if(group){
-                        setSelection(group.elementIds);
-                    } else {
                 setSelection([id]);
-                    }
+            } else if(selectedIds.length > 1 && !getGroupForElement(id)){
+                pendingSelectClick = { type: 'collapse', id };
             }
         }
 
         const smx = pt.x;
         const smy = pt.y;
+        dragMoved = false;
+        pointerDownClient = { x: e.clientX, y: e.clientY };
 
             // Check if clicked element is in a group
             const group = getGroupForElement(id);
@@ -9336,7 +9654,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
             
             // Check if clicked on resize handle (including inner element)
             let resizeHandle = (t.classList && t.classList.contains('resize-handle')) ? t : (t.closest && t.closest('.resize-handle'));
-            if(!resizeHandle && id && isPointInResizeHandleZone(clickedElement, smx, smy)) resizeHandle = true;
+            if(!resizeHandle){
+                if(isGrouped && group.elementIds.every(eid => selectedIds.includes(eid))){
+                    if(isPointInAabbResizeHandleZone(getGroupBounds(group.elementIds), smx, smy)) resizeHandle = true;
+                } else if(id && isPointInResizeHandleZone(clickedElement, smx, smy)){
+                    resizeHandle = true;
+                }
+            }
             if(resizeHandle){
                 if(isGrouped){
                     // Resize group - check if all group elements are selected or just this one
@@ -9344,29 +9668,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     if(allGroupSelected || (selectedIds.length === 1 && selectedIds[0] === id)){
             resizeMode = true;
                         const groupBounds = getGroupBounds(group.elementIds);
-                        
-                        // Ensure originalBounds and originalElements are set in the group
-                        if(!group.originalBounds){
-                            group.originalBounds = {...groupBounds};
-                        }
-                        if(!group.originalElements){
-                            group.originalElements = {};
-                            group.elementIds.forEach(elementId => {
-                                const el = S.find(e => e.id === elementId);
-                                if(el){
-                                    group.originalElements[elementId] = {
-                                        x: el.x,
-                                        y: el.y,
-                                        width: el.width,
-                                        height: el.height,
-                                        props: deepCopy(el.props)
-                                    };
-                                }
-                            });
-                        }
-                        
-                        // Use the stored original bounds and elements from the group
-                        ctx = { 
+                        if(!group.originalBounds) group.originalBounds = {...groupBounds};
+                        if(!group.originalElements) group.originalElements = snapshotGroupElementStates(group.elementIds);
+
+                        // Baseline = geometria attuale, non quella del raggruppamento:
+                        // altrimenti il secondo drag ricalcola scale=1 sul size originale e resetta.
+                        ctx = {
                             isGroup: true,
                             groupId: group.id,
                             group: group,
@@ -9374,20 +9681,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
                             startHeight: groupBounds.height,
                             startMouseX: smx,
                             startMouseY: smy,
-                            originalBounds: {...group.originalBounds},
-                            originalElements: {}
+                            originalBounds: {...groupBounds},
+                            originalElements: snapshotGroupElementStates(group.elementIds)
                         };
-                        // Deep copy original elements to avoid mutations
-                        Object.keys(group.originalElements).forEach(elementId => {
-                            const orig = group.originalElements[elementId];
-                            ctx.originalElements[elementId] = {
-                                x: orig.x,
-                                y: orig.y,
-                                width: orig.width,
-                                height: orig.height,
-                                props: deepCopy(orig.props)
-                            };
-                        });
                     }
                 } else if(!isGrouped && selectedIds.length <= 1){
                     resizeMode = true;
@@ -9397,23 +9693,15 @@ document.addEventListener('DOMContentLoaded', ()=>{
             
             if(!resizeMode){
             drag = true;
-                if(isGrouped){
-                    // Move entire group
-                    const groupElementIds = group.elementIds;
-                    const items = groupElementIds.map(iid => S.find(s => s.id === iid)).filter(Boolean);
-                    ctx = { 
-                        items: items.map(it => ({ id: it.id, startX: it.x, startY: it.y })), 
-                        baseMouseX: smx, 
-                        baseMouseY: smy,
-                        isGroup: true,
-                        groupId: group.id
-                    };
-                } else {
-                    // Move individual elements
-            const movers = selectedIds.includes(id) ? selectedIds.slice() : [id];
-            const items = movers.map(iid => S.find(s => s.id === iid)).filter(Boolean);
-                    ctx = { items: items.map(it => ({ id: it.id, startX: it.x, startY: it.y })), baseMouseX: smx, baseMouseY: smy, isGroup: false };
-                }
+                const seed = selectedIds.includes(id) ? selectedIds.slice() : [id];
+                const items = snapshotItemsByIds(expandIdsWithGroups(seed));
+                ctx = {
+                    items,
+                    baseMouseX: smx,
+                    baseMouseY: smy,
+                    isGroup: !!(group && items.length && items.every(it => group.elementIds.includes(it.id)) && group.elementIds.every(eid => items.some(it => it.id === eid))),
+                    groupId: group ? group.id : null
+                };
             pushBeforeChange();
         }
         e.preventDefault();
@@ -9446,6 +9734,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
         }
 
         if(!drag && !resizeMode) return;
+        if((drag || resizeMode) && !dragMoved){
+            const pdx = e.clientX - pointerDownClient.x;
+            const pdy = e.clientY - pointerDownClient.y;
+            if((pdx * pdx + pdy * pdy) > 16) dragMoved = true;
+        }
         const cr = lc.getBoundingClientRect();
         const mx = (e.clientX - cr.left) / cr.width * W;
         const my = (e.clientY - cr.top) / cr.height * H;
@@ -9457,24 +9750,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 if(Math.abs(dx) >= Math.abs(dy)) dy = 0;
                 else dx = 0;
             }
-            ctx.items.forEach(it=>{
-                const el = S.find(s=>s.id===it.id);
-                if(!el) return;
-                    // Calculate new position
-                    let newX = it.startX + dx;
-                    let newY = it.startY + dy;
-                    
-                    if(!isUnconstrainedPointer(e)){
-                        const bounds = getRotatedBounds(el);
-                        const effectiveWidth = bounds.width;
-                        const effectiveHeight = bounds.height;
-                        newX = Math.max((effectiveWidth - el.width) / 2, Math.min(newX, W - (effectiveWidth + el.width) / 2));
-                        newY = Math.max((effectiveHeight - el.height) / 2, Math.min(newY, H - (effectiveHeight + el.height) / 2));
-                    }
-                    
-                        el.x = snapToPixel(newX);
-                        el.y = snapToPixel(newY);
-            });
+            const free = isUnconstrainedPointer(e);
+            applyPartitionedTranslation(ctx.items, dx, dy, free);
             render();
             updateProps();
             } else if(resizeMode && ctx){
@@ -9592,13 +9869,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 }
                 
             if(drag && ctx && ctx.items){
-                // Update group bounds after drag if it was a group
-                if(ctx.isGroup && ctx.groupId){
-                    const group = groups.find(g => g.id === ctx.groupId);
-                    if(group){
-                        group.bounds = getGroupBounds(group.elementIds);
-                    }
-                }
+                refreshGroupBoundsForItems(ctx.items);
                 const seenThreadDrag = new Set();
                 ctx.items.forEach(it => {
                     const elMoved = S.find(s => s.id === it.id);
@@ -9645,14 +9916,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 });
             }
 
-            // ctrl/meta -> toggle behavior; otherwise replace selection
+            // ctrl/meta -> toggle by atomic unit (whole group); otherwise replace
             if(e.ctrlKey || e.metaKey){
-                selected.forEach(id=>{
-                    const i = selectedIds.indexOf(id);
-                    if(i===-1) selectedIds.push(id); else selectedIds.splice(i,1);
-                });
+                uniqueAtomicUnits(selected).forEach(unit => toggleAtomicUnitInList(unit));
             } else {
-                selectedIds = selected;
+                selectedIds = expandIdsWithGroups(selected);
             }
 
             marqueeActive = false;
@@ -9664,6 +9932,18 @@ document.addEventListener('DOMContentLoaded', ()=>{
             e.preventDefault();
             return;
         }
+
+        if(pendingSelectClick && !dragMoved && !resizeMode){
+            if(pendingSelectClick.type === 'toggle-off'){
+                pushBeforeChange();
+                toggleSelection(pendingSelectClick.id);
+            } else if(pendingSelectClick.type === 'collapse'){
+                pushBeforeChange();
+                setSelection([pendingSelectClick.id]);
+            }
+        }
+        pendingSelectClick = null;
+        dragMoved = false;
 
         if(resizeMode && ctx && ctx.el && !ctx.isGroup){
             syncThreadDimensionsFromElementIfSynced(ctx.el);
@@ -9702,6 +9982,15 @@ document.addEventListener('DOMContentLoaded', ()=>{
             if(e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA'){ e.preventDefault(); deleteSelected(); }
         }
 
+        if(e.key === 'Escape' && selectedIds.length > 0){
+            const ae = document.activeElement;
+            if(!ae || (ae.tagName !== 'INPUT' && ae.tagName !== 'TEXTAREA' && ae.tagName !== 'SELECT')){
+                e.preventDefault();
+                setSelection([]);
+                return;
+            }
+        }
+
             // Ignore arrow keys if user is typing in an input/select/textarea
             const activeElement = document.activeElement;
             if(activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'SELECT' || activeElement.tagName === 'TEXTAREA')){
@@ -9733,36 +10022,17 @@ document.addEventListener('DOMContentLoaded', ()=>{
                         const stepPixels = e.shiftKey ? 5 : 1;
                         const step = stepPixels / pixelsPerCm;
                     pushBeforeChange();
-                    selectedIds.forEach(id=>{
-                        const el = S.find(s=>s.id===id); if(!el) return;
-                            const bounds = getRotatedBounds(el);
-                            const effectiveWidth = bounds.width;
-                            const effectiveHeight = bounds.height;
-                            const free = isUnconstrainedPointer(e);
-                            
-                        switch(e.key){
-                                case 'ArrowUp': {
-                                    const newY = el.y - step;
-                                    el.y = snapToPixel(free ? newY : Math.max((effectiveHeight - el.height) / 2, newY));
-                                    break;
-                                }
-                                case 'ArrowDown': {
-                                    const newY = el.y + step;
-                                    el.y = snapToPixel(free ? newY : Math.min(H - (effectiveHeight + el.height) / 2, newY));
-                                    break;
-                                }
-                                case 'ArrowLeft': {
-                                    const newX = el.x - step;
-                                    el.x = snapToPixel(free ? newX : Math.max((effectiveWidth - el.width) / 2, newX));
-                                    break;
-                                }
-                                case 'ArrowRight': {
-                                    const newX = el.x + step;
-                                    el.x = snapToPixel(free ? newX : Math.min(W - (effectiveWidth + el.width) / 2, newX));
-                                    break;
-                            }
-                        }
-                        });
+                    const free = isUnconstrainedPointer(e);
+                    let dx = 0, dy = 0;
+                    switch(e.key){
+                        case 'ArrowUp': dy = -step; break;
+                        case 'ArrowDown': dy = step; break;
+                        case 'ArrowLeft': dx = -step; break;
+                        case 'ArrowRight': dx = step; break;
+                    }
+                    const items = snapshotItemsByIds(expandIdsWithGroups(selectedIds));
+                    applyPartitionedTranslation(items, dx, dy, free);
+                    refreshGroupBoundsForItems(items);
                         const seenThreadArrow = new Set();
                         selectedIds.forEach(id=>{
                             const el = S.find(s=>s.id===id);
@@ -10031,6 +10301,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
                             el[o][k] = (!isNaN(numVal) && numVal >= 100 && numVal <= 900) ? numVal : value;
                         }
                     else el[o][k] = value;
+                    if(k === 'textOutlineEnabled' && !!value && (Number(el[o].textOutlineWidth) || 0) <= 0) el[o].textOutlineWidth = 1;
+                    if(k === 'textOutlineEnabled' && !value) el[o].textOutline2Enabled = false;
                 } else {
                     if(keyPath === 'width' || keyPath === 'height'){
                         const prevW = Number(el.width), prevH = Number(el.height);
@@ -11400,6 +11672,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
                         <option value="800" ${rule.fontWeight === '800' ? 'selected' : ''}>800</option>
                         <option value="900" ${rule.fontWeight === '900' ? 'selected' : ''}>900</option>
                     </select>
+                    <label style="font-size:12px">Font Family:</label>
+                    <select class="global-regex-font-family-select" data-rule-index="${index}" style="font-size:12px;padding:4px">
+                        ${generateRegexFontFamilyOptions(rule.fontFamily)}
+                    </select>
                     <label style="font-size:12px">Font Size:</label>
                     <input type="number" class="global-regex-size-input" data-rule-index="${index}" placeholder="inherit" value="${rule.fontSize || ''}" min="6" max="200" step="1" style="font-size:12px;padding:4px">
                 </div>
@@ -11439,21 +11715,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     document.addEventListener('click', function(e){
         if(e.target.classList.contains('add-global-regex-rule-btn')){
             if(!globalRegexRules) globalRegexRules = [];
-            globalRegexRules.push({
-                pattern: '',
-                fontWeight: 'inherit',
-                italic: false,
-                underline: false,
-                fontSize: '',
-                lineHeight: '',
-                letterSpacing: '',
-                paddingTop: '',
-                paddingBottom: '',
-                paddingLeft: '',
-                paddingRight: '',
-                enabled: true,
-                order: globalRegexRules.length
-            });
+            globalRegexRules.push(defaultRegexRule(globalRegexRules.length));
             updateGlobalRegexRulesUI();
             render();
             saveCurrentDesign();
@@ -11519,6 +11781,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
     document.addEventListener('change', function(e){
         if(e.target.classList.contains('global-regex-weight-select') ||
+           e.target.classList.contains('global-regex-font-family-select') ||
            e.target.classList.contains('global-regex-italic-checkbox') ||
            e.target.classList.contains('global-regex-underline-checkbox') ||
            e.target.classList.contains('global-regex-size-input') ||
@@ -11530,6 +11793,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
             if(e.target.classList.contains('global-regex-weight-select')){
                 globalRegexRules[index].fontWeight = e.target.value;
+            } else if(e.target.classList.contains('global-regex-font-family-select')){
+                globalRegexRules[index].fontFamily = e.target.value;
             } else if(e.target.classList.contains('global-regex-italic-checkbox')){
                 globalRegexRules[index].italic = e.target.checked;
             } else if(e.target.classList.contains('global-regex-underline-checkbox')){
