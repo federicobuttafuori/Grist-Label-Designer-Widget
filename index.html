@@ -126,10 +126,92 @@
         .label-element{position:absolute;cursor:move;border:1px solid transparent;font-size:16px;line-height:1.2;overflow:hidden;word-wrap:break-word;user-select:none;transform-origin:center center}
         .label-element.selected{border:2px dashed #007aff;box-shadow:0 0 0 1px rgba(0,122,255,.1);overflow:visible}
         .label-element.synchronized-selected{border:2px dashed #4CAF50;box-shadow:0 0 0 1px rgba(76,175,80,.2), 0 0 8px rgba(76,175,80,.3)}
-        .label-element.layer-pick-focus{outline:2px dashed #9c27b0!important;box-shadow:0 0 0 2px rgba(156,39,176,0.35)!important}
+        .label-element.layer-pick-focus{outline:2px dashed #9c27b0!important;box-shadow:0 0 0 2px rgba(156,39,176,0.35)!important;isolation:isolate}
+        @keyframes layer-pick-shine-sweep{
+            0%{background-position:118% 0}
+            86%{background-position:-70% 0}
+            100%{background-position:-70% 0}
+        }
+        @keyframes layer-pick-shine-sweep-fill{
+            0%{background-position:-50% 0}
+            86%{background-position:190% 0}
+            100%{background-position:190% 0}
+        }
+        .layer-pick-text-host{position:relative;z-index:2}
+        .layer-pick-glyph-shine,
+        .layer-pick-glyph-shine *{
+            color:transparent!important;
+            -webkit-text-fill-color:transparent!important;
+            background-color:transparent!important;
+            border-color:transparent!important;
+            box-shadow:none!important;
+            text-shadow:none!important;
+            filter:none!important;
+            -webkit-filter:none!important;
+            outline:none!important;
+        }
+        .layer-pick-glyph-shine{
+            position:absolute;
+            left:0;
+            top:0;
+            width:100%;
+            height:100%;
+            margin:0!important;
+            pointer-events:none;
+            overflow:hidden;
+            background-image:linear-gradient(105deg,rgba(156,39,176,0) 22%,rgba(255,255,255,.95) 48%,rgba(206,147,216,.95) 52%,rgba(156,39,176,0) 78%);
+            background-size:240% 100%;
+            background-repeat:no-repeat;
+            -webkit-background-clip:text;
+            background-clip:text;
+            animation:layer-pick-shine-sweep 1.35s ease-out infinite;
+        }
+        .layer-pick-glyph-shine *{
+            background-image:inherit;
+            background-size:inherit;
+            background-position:inherit;
+            background-repeat:inherit;
+            -webkit-background-clip:text;
+            background-clip:text;
+            animation:inherit;
+        }
+        .layer-pick-shine-fill{
+            position:absolute;
+            inset:0;
+            z-index:1;
+            pointer-events:none;
+            border-radius:inherit;
+            overflow:hidden;
+            background-image:linear-gradient(105deg,rgba(156,39,176,0) 12%,rgba(255,255,255,.5) 44%,rgba(206,147,216,.72) 50%,rgba(156,39,176,.28) 58%,rgba(156,39,176,0) 88%);
+            background-size:220% 100%;
+            background-repeat:no-repeat;
+            animation:layer-pick-shine-sweep-fill 2.25s ease-out infinite;
+        }
+        .layer-pick-shine-media{
+            position:absolute;
+            inset:0;
+            z-index:2;
+            pointer-events:none;
+            background-image:linear-gradient(105deg,rgba(156,39,176,0) 22%,rgba(255,255,255,.9) 48%,rgba(206,147,216,.88) 52%,rgba(156,39,176,0) 78%);
+            background-size:240% 100%;
+            background-repeat:no-repeat;
+            animation:layer-pick-shine-sweep 1.35s ease-out infinite;
+            -webkit-mask-repeat:no-repeat;
+            mask-repeat:no-repeat;
+            -webkit-mask-position:center;
+            mask-position:center;
+        }
+        .layer-pick-shine-media.is-dark{mix-blend-mode:lighten}
+        .layer-pick-shine-media.is-alpha{mix-blend-mode:overlay}
+        @media (prefers-reduced-motion:reduce){
+            .layer-pick-glyph-shine,
+            .layer-pick-glyph-shine *,
+            .layer-pick-shine-fill,
+            .layer-pick-shine-media{animation:none;background-position:50% 0}
+        }
         .layer-pick-peek-fragment{pointer-events:none;box-sizing:border-box}
         .layer-pick-peek-fragment .layer-pick-peek-clip{position:absolute;inset:0;overflow:hidden;pointer-events:none}
-        .layer-pick-peek-fragment .layer-pick-peek-clone{pointer-events:none;opacity:0.72;border-color:transparent!important;box-shadow:none!important;outline:none!important}
+        .layer-pick-peek-fragment .layer-pick-peek-clone{pointer-events:none;opacity:0.88;border-color:transparent!important;box-shadow:none!important;outline:none!important}
         .layer-pick-peek-element-outline{pointer-events:none;box-sizing:border-box;border:2px dashed rgba(156,39,176,0.75);box-shadow:0 0 0 1px rgba(156,39,176,0.22);background:transparent}
         .resize-handle{position:absolute;width:12px;height:12px;bottom:-6px;right:-6px;cursor:nwse-resize;display:none;z-index:10000;pointer-events:auto;background:transparent}
         .resize-handle-inner{position:absolute;top:50%;left:50%;width:8px;height:8px;box-sizing:border-box;background:#fff;border:1.5px solid #1e3a8a;border-radius:1px;transform:translate(-50%,-50%);box-shadow:0 0 0 1px #fff,0 1px 2px rgba(0,0,0,.28);pointer-events:none}
@@ -180,7 +262,11 @@
         .bw-controls .bw-toggle-row{grid-column:1/-1;display:flex;align-items:center;gap:8px}
         .prop-feature{margin-top:10px;padding-top:10px;border-top:1px solid #e8e8e8}
         .prop-feature-head{display:flex;align-items:center;gap:6px;margin-bottom:0}
+        .prop-feature-head.is-collapsible{cursor:pointer}
         .prop-feature-label{font-size:13px;font-weight:600;flex:1;min-width:0}
+        .prop-feature-head.is-collapsible .prop-feature-label{user-select:none}
+        .prop-feature-chevron{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid #8e8e93;flex-shrink:0;transition:transform .15s;margin-right:2px}
+        .prop-feature-head.is-collapsed .prop-feature-chevron{transform:rotate(-90deg)}
         .prop-feature-head .prop-sync-btn{flex-shrink:0;margin-left:0}
         .prop-feature-switch{position:relative;display:inline-flex;align-items:center;cursor:pointer;flex-shrink:0}
         .prop-feature-switch input{position:absolute;opacity:0;width:0;height:0;margin:0}
@@ -761,6 +847,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
             return roundedPixels / PIXELS_PER_CM;
         }
 
+        function snapToPixelDown(valueCm){
+            return Math.floor((Number(valueCm) || 0) * PIXELS_PER_CM) / PIXELS_PER_CM;
+        }
+
         function finiteNumber(value, fallback){
             const n = Number(value);
             return Number.isFinite(n) ? n : fallback;
@@ -980,88 +1070,100 @@ document.addEventListener('DOMContentLoaded', ()=>{
             el.y = snapToPixel(el.y);
         }
 
-        function elementAabbInsideCanvas(el){
+        // Float slop only (~0.04px). Do not use a 1px band: snap-up would look "inside"
+        // and accumulate past the wall across drags.
+        const AABB_OVERFLOW_EPS = 1e-4;
+
+        function aabbCanvasOverflow(el){
             const b = getEffectiveBounds(el);
-            const eps = 1e-4;
-            return b.x >= -eps && b.y >= -eps && (b.x + b.width) <= W + eps && (b.y + b.height) <= H + eps;
+            return {
+                left: Math.max(0, -b.x),
+                top: Math.max(0, -b.y),
+                right: Math.max(0, b.x + b.width - W),
+                bottom: Math.max(0, b.y + b.height - H)
+            };
         }
 
-        function snapToPixelDown(valueCm){
-            return Math.floor((Number(valueCm) || 0) * PIXELS_PER_CM) / PIXELS_PER_CM;
+        function overflowNoWorseThan(el, cap){
+            const o = aabbCanvasOverflow(el);
+            return o.left <= cap.left + AABB_OVERFLOW_EPS
+                && o.top <= cap.top + AABB_OVERFLOW_EPS
+                && o.right <= cap.right + AABB_OVERFLOW_EPS
+                && o.bottom <= cap.bottom + AABB_OVERFLOW_EPS;
         }
 
-        function binarySearchFitSize(el, anchorTL, fromW, fromH, toW, toH){
+        function binarySearchFitSize(el, anchorTL, fromW, fromH, toW, toH, overflowCap){
+            setElementBoxKeepingLocalTopLeft(el, anchorTL, fromW, fromH);
+            if(!overflowNoWorseThan(el, overflowCap)) return;
             let lo = 0, hi = 1;
             for(let i = 0; i < 24; i++){
                 const mid = (lo + hi) / 2;
                 setElementBoxKeepingLocalTopLeft(el, anchorTL, fromW + (toW - fromW) * mid, fromH + (toH - fromH) * mid);
-                if(elementAabbInsideCanvas(el)) lo = mid;
+                if(overflowNoWorseThan(el, overflowCap)) lo = mid;
                 else hi = mid;
             }
             setElementBoxKeepingLocalTopLeft(el, anchorTL, fromW + (toW - fromW) * lo, fromH + (toH - fromH) * lo);
         }
 
-        function pullElementSizeInside(el, anchorTL, w, h){
-            const minSize = 0.2;
-            setElementBoxKeepingLocalTopLeft(el, anchorTL, Math.max(minSize, snapToPixelDown(w)), Math.max(minSize, snapToPixelDown(h)));
-            if(elementAabbInsideCanvas(el)) return;
-            binarySearchFitSize(el, anchorTL, minSize, h, w, h);
-            if(elementAabbInsideCanvas(el)) return;
-            const fittedW = el.width;
-            binarySearchFitSize(el, anchorTL, fittedW, minSize, fittedW, h);
-        }
-
-        function applySnappedSizeInside(el, anchorTL, w, h){
+        function applySnappedSizeInside(el, anchorTL, w, h, fallbackW, fallbackH, overflowCap){
             const minSize = 0.2;
             w = Math.max(minSize, w);
             h = Math.max(minSize, h);
             setElementBoxKeepingLocalTopLeft(el, anchorTL, snapToPixel(w), snapToPixel(h));
-            if(elementAabbInsideCanvas(el)) return;
+            if(overflowNoWorseThan(el, overflowCap)) return;
             setElementBoxKeepingLocalTopLeft(el, anchorTL, Math.max(minSize, snapToPixelDown(w)), Math.max(minSize, snapToPixelDown(h)));
-            if(elementAabbInsideCanvas(el)) return;
+            if(overflowNoWorseThan(el, overflowCap)) return;
             setElementBoxKeepingLocalTopLeft(el, anchorTL, w, h);
-            if(elementAabbInsideCanvas(el)) return;
-            pullElementSizeInside(el, anchorTL, w, h);
+            if(overflowNoWorseThan(el, overflowCap)) return;
+            if(fallbackW != null && fallbackH != null){
+                setElementBoxKeepingLocalTopLeft(el, anchorTL, fallbackW, fallbackH);
+            }
         }
 
-        // Resize: keep the original top-left corner fixed in canvas space
-        // and stop growth at the canvas edge. Never shift that corner to make room.
+        // Pin original local top-left. Constraint is "do not increase AABB overflow
+        // vs start", not "AABB must be fully inside". Pinning a rotated corner on a
+        // wall makes every positive size fail the latter, and searching from minSize
+        // collapses the element to ~0.
         function setElementSizeStoppedAtWall(el, anchorTL, startW, startH, wantW, wantH){
             const minSize = 0.2;
             wantW = Math.max(minSize, wantW);
             wantH = Math.max(minSize, wantH);
             startW = Math.max(minSize, startW);
             startH = Math.max(minSize, startH);
+
+            setElementBoxKeepingLocalTopLeft(el, anchorTL, startW, startH);
+            const overflowCap = aabbCanvasOverflow(el);
+
             setElementBoxKeepingLocalTopLeft(el, anchorTL, wantW, wantH);
-            if(elementAabbInsideCanvas(el)){
-                applySnappedSizeInside(el, anchorTL, wantW, wantH);
+            if(overflowNoWorseThan(el, overflowCap)){
+                applySnappedSizeInside(el, anchorTL, wantW, wantH, startW, startH, overflowCap);
                 return;
             }
+
             setElementBoxKeepingLocalTopLeft(el, anchorTL, startW, startH);
-            if(!elementAabbInsideCanvas(el)){
-                pullElementSizeInside(el, anchorTL, startW, startH);
-                startW = el.width;
-                startH = el.height;
-            }
             if(el.lockAspectRatio){
-                binarySearchFitSize(el, anchorTL, startW, startH, wantW, wantH);
+                binarySearchFitSize(el, anchorTL, startW, startH, wantW, wantH, overflowCap);
             } else {
                 if(wantW > startW){
-                    binarySearchFitSize(el, anchorTL, startW, startH, wantW, startH);
+                    binarySearchFitSize(el, anchorTL, startW, startH, wantW, startH, overflowCap);
                 } else {
                     setElementBoxKeepingLocalTopLeft(el, anchorTL, wantW, startH);
+                    if(!overflowNoWorseThan(el, overflowCap)){
+                        binarySearchFitSize(el, anchorTL, startW, startH, wantW, startH, overflowCap);
+                    }
                 }
                 const fittedW = el.width;
-                if(wantH > startH){
-                    binarySearchFitSize(el, anchorTL, fittedW, startH, fittedW, wantH);
+                const fittedStartH = startH;
+                if(wantH > fittedStartH){
+                    binarySearchFitSize(el, anchorTL, fittedW, fittedStartH, fittedW, wantH, overflowCap);
                 } else {
                     setElementBoxKeepingLocalTopLeft(el, anchorTL, fittedW, wantH);
-                    if(!elementAabbInsideCanvas(el)){
-                        binarySearchFitSize(el, anchorTL, fittedW, startH, fittedW, wantH);
+                    if(!overflowNoWorseThan(el, overflowCap)){
+                        binarySearchFitSize(el, anchorTL, fittedW, fittedStartH, fittedW, wantH, overflowCap);
                     }
                 }
             }
-            applySnappedSizeInside(el, anchorTL, el.width, el.height);
+            applySnappedSizeInside(el, anchorTL, el.width, el.height, startW, startH, overflowCap);
         }
 
         function fitElementsInsideCanvas(els){
@@ -1409,6 +1511,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
                         #label-canvas{position:static!important;width:${profile.width}cm!important;height:${profile.height}cm!important;transform:${printTr}!important;transform-origin:0 0!important;box-shadow:none!important;display:block!important;overflow:visible!important;background:#fff!important}
                             .label-element{page-break-inside:avoid!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
                         .label-element.selected{border:1px solid transparent!important;box-shadow:none!important}
+                        .label-element.layer-pick-focus{outline:none!important;box-shadow:none!important}
+                        .layer-pick-glyph-shine,.layer-pick-shine-fill,.layer-pick-shine-media{display:none!important}
+                        .layer-pick-peek-fragment,.layer-pick-peek-element-outline{display:none!important}
                         .resize-handle{display:none!important}
                         .group-bounds-frame{display:none!important}
                             .label-element[style*="border"]{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
@@ -1944,10 +2049,32 @@ document.addEventListener('DOMContentLoaded', ()=>{
             if(!historyStacks[key]){
                 historyStacks[key] = {
                     history: [],
-                    historyIndex: -1
+                    historyIndex: -1,
+                    hasCurrentTip: true
                 };
             }
             return historyStacks[key];
+        }
+
+        function captureHistorySnapshot(){
+            return {
+                data: deepCopy(S),
+                sel: deepCopy(selectedIds),
+                groups: deepCopy(groups)
+            };
+        }
+
+        function applyHistorySnapshot(snap){
+            S = deepCopy(snap.data);
+            groups = snap.groups ? deepCopy(snap.groups) : [];
+            groups.forEach(group => {
+                group.bounds = getGroupBounds(group.elementIds);
+            });
+            selectedIds = expandIdsWithGroups(deepCopy(snap.sel));
+            render();
+            updateProps();
+            updateBtns();
+            saveCurrentDesign();
         }
         
     function pushHistorySnapshot(){
@@ -1955,13 +2082,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
             if(stack.historyIndex < stack.history.length - 1) {
                 stack.history = stack.history.slice(0, stack.historyIndex + 1);
             }
-            stack.history.push({
-            data: deepCopy(S),
-                sel: deepCopy(selectedIds),
-                groups: deepCopy(groups)
-        });
+            stack.history.push(captureHistorySnapshot());
             if(stack.history.length > MAX_HISTORY) stack.history.shift();
             stack.historyIndex = stack.history.length - 1;
+            stack.hasCurrentTip = false;
     }
 
     function resetHistory(){
@@ -1969,24 +2093,20 @@ document.addEventListener('DOMContentLoaded', ()=>{
             stack.history = [];
             stack.historyIndex = -1;
         pushHistorySnapshot();
+            stack.hasCurrentTip = true;
     }
 
     function undo(){
             const stack = getHistoryStack();
+            if(stack.historyIndex === stack.history.length - 1 && !stack.hasCurrentTip){
+                stack.history.push(captureHistorySnapshot());
+                if(stack.history.length > MAX_HISTORY) stack.history.shift();
+                stack.historyIndex = stack.history.length - 1;
+                stack.hasCurrentTip = true;
+            }
             if(stack.historyIndex <= 0) { msg('Nothing to undo'); return; }
             stack.historyIndex--;
-            const snap = stack.history[stack.historyIndex];
-        S = deepCopy(snap.data);
-            groups = snap.groups ? deepCopy(snap.groups) : [];
-            // Recalculate group bounds after undo
-            groups.forEach(group => {
-                group.bounds = getGroupBounds(group.elementIds);
-            });
-        selectedIds = expandIdsWithGroups(deepCopy(snap.sel));
-        render();
-        updateProps();
-        updateBtns();
-            saveCurrentDesign();
+            applyHistorySnapshot(stack.history[stack.historyIndex]);
         msg('Undo');
     }
 
@@ -1994,18 +2114,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
             const stack = getHistoryStack();
             if(stack.historyIndex >= stack.history.length - 1) { msg('Nothing to redo'); return; }
             stack.historyIndex++;
-            const snap = stack.history[stack.historyIndex];
-        S = deepCopy(snap.data);
-            groups = snap.groups ? deepCopy(snap.groups) : [];
-            // Recalculate group bounds after redo
-            groups.forEach(group => {
-                group.bounds = getGroupBounds(group.elementIds);
-            });
-        selectedIds = expandIdsWithGroups(deepCopy(snap.sel));
-        render();
-        updateProps();
-        updateBtns();
-            saveCurrentDesign();
+            applyHistorySnapshot(stack.history[stack.historyIndex]);
         msg('Redo');
     }
 
@@ -2297,6 +2406,88 @@ document.addEventListener('DOMContentLoaded', ()=>{
             zTop = Math.max(zTop, other.zIndex || 0);
         });
         return zTop + 1;
+    }
+
+    function hasLayerPickFill(el){
+        if(!el || !el.props) return false;
+        if(el.type === 'box') return !!el.props.fillEnabled;
+        if(el.type === 'line') return true;
+        if(el.type === 'text' || el.type === 'data' || el.type === 'image'){
+            const bg = el.props.backgroundColor;
+            return !!(bg && bg !== 'transparent');
+        }
+        return false;
+    }
+
+    function applyLayerPickMask(node, src, fit){
+        if(!node || !src) return;
+        const size = (!fit || fit === 'fill') ? '100% 100%' : fit;
+        const image = `url("${String(src).replace(/"/g, '%22')}")`;
+        node.style.webkitMaskImage = image;
+        node.style.maskImage = image;
+        node.style.webkitMaskSize = size;
+        node.style.maskSize = size;
+        node.style.webkitMaskRepeat = 'no-repeat';
+        node.style.maskRepeat = 'no-repeat';
+        node.style.webkitMaskPosition = 'center';
+        node.style.maskPosition = 'center';
+    }
+
+    function appendLayerPickShineLayer(d, className){
+        const layer = document.createElement('div');
+        layer.className = className;
+        layer.setAttribute('aria-hidden', 'true');
+        d.appendChild(layer);
+        return layer;
+    }
+
+    function attachLayerPickGlyphShine(d){
+        if(d.querySelector('.layer-pick-glyph-shine')) return;
+        const host = Array.from(d.children).find(ch => ch.nodeType === 1 && ch.tagName === 'DIV' && !ch.classList.contains('resize-handle') && !ch.classList.contains('layer-pick-shine-fill') && !ch.classList.contains('layer-pick-shine-media'));
+        if(!host) return;
+        host.classList.add('layer-pick-text-host');
+        const shine = host.cloneNode(true);
+        shine.classList.add('layer-pick-glyph-shine');
+        shine.classList.remove('layer-pick-text-host');
+        shine.querySelectorAll('.layer-pick-glyph-shine, .resize-handle, .layer-pick-shine-fill, .layer-pick-shine-media').forEach(n => n.remove());
+        shine.setAttribute('aria-hidden', 'true');
+        shine.style.position = 'absolute';
+        shine.style.left = '0';
+        shine.style.top = '0';
+        shine.style.width = '100%';
+        shine.style.height = '100%';
+        shine.style.margin = '0';
+        shine.style.filter = 'none';
+        shine.style.webkitFilter = 'none';
+        shine.style.transform = 'none';
+        shine.style.pointerEvents = 'none';
+        host.appendChild(shine);
+    }
+
+    function attachLayerPickShine(d, el){
+        if(!d || !el) return;
+        if(hasLayerPickFill(el) && !d.querySelector(':scope > .layer-pick-shine-fill')){
+            appendLayerPickShineLayer(d, 'layer-pick-shine-fill');
+        }
+        if((el.type === 'text' || el.type === 'data')) attachLayerPickGlyphShine(d);
+        if(d.querySelector(':scope > .layer-pick-shine-media')) return;
+        if(el.type === 'image' || el.type === 'qr'){
+            const img = d.querySelector('img');
+            if(!img || !img.src) return;
+            const layer = appendLayerPickShineLayer(d, 'layer-pick-shine-media ' + (el.type === 'qr' ? 'is-dark' : 'is-alpha'));
+            const fit = img.style.objectFit || 'contain';
+            applyLayerPickMask(layer, img.src, fit);
+        } else if(el.type === 'barcode'){
+            const svg = d.querySelector('svg');
+            if(!svg) return;
+            const layer = appendLayerPickShineLayer(d, 'layer-pick-shine-media is-dark');
+            try{
+                const xml = new XMLSerializer().serializeToString(svg);
+                applyLayerPickMask(layer, 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml), 'fill');
+            } catch(err){
+                layer.remove();
+            }
+        }
     }
 
     function appendLayerPickPeekFragments(canvasEl, sourceDiv, el, sorted, baseOffsetY){
@@ -2897,8 +3088,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
             }
 
             if(layerPickMode && focusSliceIds.has(el.id)){
-                const hasOccludedPeek = getOccludedRectsForElement(el, sorted).length > 0;
-                if(!hasOccludedPeek) d.classList.add('layer-pick-focus');
+                d.classList.add('layer-pick-focus');
+                attachLayerPickShine(d, el);
             }
 
             // selection visuals
@@ -4548,6 +4739,63 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }
 
     // ---------- Properties Panels ----------
+    const propFeatureCollapsed = Object.create(null);
+
+    function normalizePropFeatureCollapseKey(raw){
+        let k = String(raw || '');
+        if(k.indexOf('multi.') === 0) k = k.slice(6);
+        return k;
+    }
+
+    function propFeatureCollapseKeyFromOpts(opts){
+        const o = opts || {};
+        return normalizePropFeatureCollapseKey(o.dataProp || o.checkboxClass || o.id || '');
+    }
+
+    function setPropFeatureCollapsed(rawKey, collapsed){
+        const k = normalizePropFeatureCollapseKey(rawKey);
+        if(!k) return;
+        if(collapsed) propFeatureCollapsed[k] = true;
+        else delete propFeatureCollapsed[k];
+    }
+
+    function expandPropFeatureOnEnable(rawKey){
+        const k = normalizePropFeatureCollapseKey(rawKey);
+        if(!k) return;
+        if(k === 'props.showBorder' || k === 'props.fillEnabled' || k === 'props.regexRulesEnabled' || k === 'props.textOutlineEnabled' || k === 'props.textOutline2Enabled' || k === 'enable-background-cb'){
+            setPropFeatureCollapsed(k, false);
+        }
+    }
+
+    function bindPropFeatureCollapse(root){
+        if(!root || !root.querySelectorAll) return;
+        root.querySelectorAll('.prop-feature-head.is-collapsible').forEach(head => {
+            if(head.dataset.collapseBound === '1') return;
+            head.dataset.collapseBound = '1';
+            const toggle = function(e){
+                if(e.target.closest('.prop-feature-switch, .prop-sync-btn, button, input, a')) return;
+                const feature = head.closest('.prop-feature');
+                const cb = head.querySelector('.prop-feature-switch input');
+                const body = feature && feature.querySelector(':scope > .prop-feature-body');
+                if(!feature || !cb || !cb.checked || cb.disabled || !body) return;
+                const key = head.dataset.collapseKey;
+                const next = !(key && propFeatureCollapsed[key]);
+                setPropFeatureCollapsed(key, next);
+                body.hidden = next;
+                feature.classList.toggle('is-collapsed', next);
+                head.classList.toggle('is-collapsed', next);
+                head.setAttribute('aria-expanded', next ? 'false' : 'true');
+                e.preventDefault();
+            };
+            head.addEventListener('click', toggle);
+            head.addEventListener('keydown', function(e){
+                if(e.key !== 'Enter' && e.key !== ' ') return;
+                e.preventDefault();
+                toggle(e);
+            });
+        });
+    }
+
     function propFeatureHead(label, opts){
         const o = opts || {};
         const parts = [];
@@ -4557,15 +4805,26 @@ document.addEventListener('DOMContentLoaded', ()=>{
         if(o.checked) parts.push('checked');
         if(o.disabled) parts.push('disabled');
         const cb = parts.length ? parts.join(' ') : '';
-        return `<div class="prop-feature-head">
+        const key = propFeatureCollapseKeyFromOpts(o);
+        const enabled = !!o.checked && !o.disabled;
+        const collapsed = enabled && !!(key && propFeatureCollapsed[key]);
+        const headCls = `prop-feature-head${enabled ? ' is-collapsible' : ''}${collapsed ? ' is-collapsed' : ''}`;
+        const keyAttr = key ? ` data-collapse-key="${escapeHtml(key)}"` : '';
+        const a11y = enabled ? ` tabindex="0" role="button" aria-expanded="${collapsed ? 'false' : 'true'}" title="Riduci o espandi la sezione"` : '';
+        const chevron = enabled ? '<span class="prop-feature-chevron" aria-hidden="true"></span>' : '';
+        return `<div class="${headCls}"${keyAttr}${a11y}>
             <span class="prop-feature-label">${label}</span>
+            ${chevron}
             ${o.syncHtml || ''}
             <label class="prop-feature-switch"><input type="checkbox" ${cb}><span class="prop-feature-switch-ui"></span></label>
         </div>`;
     }
     function propFeatureBlock(label, opts, bodyHtml){
-        const hidden = !(opts && opts.checked);
-        return `<div class="prop-feature">${propFeatureHead(label, opts)}<div class="prop-feature-body"${hidden ? ' hidden' : ''}>${bodyHtml}</div></div>`;
+        const enabled = !!(opts && opts.checked);
+        const key = propFeatureCollapseKeyFromOpts(opts);
+        const collapsed = enabled && !!(key && propFeatureCollapsed[key]);
+        const hidden = !enabled || collapsed;
+        return `<div class="prop-feature${collapsed ? ' is-collapsed' : ''}">${propFeatureHead(label, opts)}<div class="prop-feature-body"${hidden ? ' hidden' : ''}>${bodyHtml}</div></div>`;
     }
 
     function resizeAutoGrowTextarea(el){
@@ -4929,6 +5188,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         pp.innerHTML = h;
             bindAutoGrowTextareas(pp);
             bindRotationNudgeButtons(pp, () => [el]);
+            bindPropFeatureCollapse(pp);
             
             const aspectLinkBtn = pp.querySelector('#prop-aspect-link-toggle');
             if(aspectLinkBtn){
@@ -5280,6 +5540,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                         pushBeforeChange();
                         if(this.checked){
                             el.props.backgroundColor = (bgInput && bgInput.value) ? bgInput.value : '#ffffff';
+                            expandPropFeatureOnEnable('enable-background-cb');
                             if(body) body.hidden = false;
                         } else {
                             el.props.backgroundColor = 'transparent';
@@ -5431,6 +5692,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         h += `<hr><button id="btn-delete">Delete Selected</button>`;
         pp.innerHTML = h;
         bindRotationNudgeButtons(pp, () => elems);
+        bindPropFeatureCollapse(pp);
 
         const enableBgCb = pp.querySelector('.enable-background-cb');
         const bgInput = pp.querySelector('.background-color-input');
@@ -5447,6 +5709,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                         el.props.backgroundColor = 'transparent';
                     }
                 });
+                if(this.checked) expandPropFeatureOnEnable('enable-background-cb');
                 if(body) body.hidden = !this.checked;
                 render();
                 saveCurrentDesign();
@@ -9999,14 +10262,26 @@ document.addEventListener('DOMContentLoaded', ()=>{
         drag = false; resizeMode = false; ctx = {};
     });
 
-    // Shift + rotella: cicla piani di sovrapposizione; rilascio Shift azzera
-    cc.addEventListener('wheel', (e) => {
+    // Shift + rotella: cicla piani di sovrapposizione.
+    // Ctrl/Cmd + rotella: zoom canvas (non zoom pagina del browser).
+    window.addEventListener('wheel', (e) => {
+        const ctrl = !!(e.ctrlKey || e.metaKey);
+        if(ctrl){
+            e.preventDefault();
+            e.stopPropagation();
+            const raw = Number(e.deltaY) || 0;
+            if(!raw) return;
+            const line = e.deltaMode === 1 ? raw * 16 : (e.deltaMode === 2 ? raw * 400 : raw);
+            setZoom(z * Math.exp(-line * 0.001));
+            return;
+        }
         if(!isFullScreen || !e.shiftKey) return;
         if(e.target.closest && e.target.closest('#sidebar')) return;
+        if(e.target !== cc && !(cc.contains && cc.contains(e.target))) return;
         e.preventDefault();
         const delta = e.deltaY > 0 ? -1 : 1;
         cycleShiftLayerPick(delta);
-    }, { passive: false });
+    }, { passive: false, capture: true });
 
     window.addEventListener('keyup', (e) => {
         if(e.key === 'Shift') clearShiftLayerPick();
@@ -10331,10 +10606,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
                         el.props.borderBottom = true;
                         el.props.borderLeft = true;
                     });
+                    expandPropFeatureOnEnable(keyPath);
                     render(); updateProps(); saveCurrentDesign();
                     return;
                 }
                 
+            if(target.type === 'checkbox' && value === true) expandPropFeatureOnEnable(keyPath);
             pushBeforeChange();
             selectedIds.forEach(id=>{
                 const el = S.find(s=>s.id===id);
@@ -10411,6 +10688,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                         el.props.borderLeft = true;
                     }
                 }
+                expandPropFeatureOnEnable(prop);
                 render(); 
                 updateProps(); 
                 saveCurrentDesign();
@@ -10509,6 +10787,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         
         const needsOutlinePanelRefresh = prop === 'props.textOutlineEnabled' || prop === 'props.textOutline2Enabled' || prop === 'props.showBorder' || prop === 'props.fillEnabled' || prop === 'props.regexRulesEnabled';
         const needsOverflowPanelRefresh = prop === 'props.textOverflow' || prop === 'props.textOverflowFormattedMeasure';
+        if(target.type === 'checkbox' && parsedValue === true) expandPropFeatureOnEnable(prop);
         
         // Testo: solo salvataggio; render su blur (vedi listener blur)
         if(isDeferredTextInput){

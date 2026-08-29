@@ -108,20 +108,68 @@ Intermittente perché dipende dal verso dell’arrotondamento (nearest pixel in 
 | Solo fermare la crescita verso `want` se `want` è fuori, tenendo `start` | Se `start` è già fuori (snap precedente), il binary search da `start` verso `want` ha t=0 ancora fuori e non recupera. |
 | Bypass “se start è fuori, lascia want” (per non imprigionare chi è uscito con Ctrl) | Confonde **fuori voluto (Ctrl)** con **fuori accidentale (snap)**. Al secondo drag senza Ctrl sblocca l’uscita. |
 
-## Fix finale (soluzione attuale)
+## Fix (parziale — poi sostituito)
 
 1. **Mai** applicare `want` solo perché `start` è fuori.
-2. Se `start` è fuori: **`pullElementSizeInside`** (floor pixel, poi binary search per asse) per tornare dentro, *poi* crescere verso `want` fino al muro.
-3. **`applySnappedSizeInside`**: snap nearest; se esce, snap **floor**; se esce ancora, size pre-snap; ultimo fallback `pullElementSizeInside`.
-4. Ctrl/Cmd continua a bypassare `setElementSizeStoppedAtWall`.
+2. Snap: nearest, poi floor, poi size pre-snap.
+3. Ctrl/Cmd continua a bypassare `setElementSizeStoppedAtWall`.
+
+`pullElementSizeInside` (binary search **da minSize 0.2 cm** verso `start` se l’AABB non era dentro) **non** è la soluzione: è la causa del bug successivo (collasso a ~0×0). Vedi la sezione sotto. Il vincolo attuale è **non aumentare l’overflow AABB rispetto a `start`**, non “AABB deve stare tutto dentro”.
 
 ## Cosa imparare per agenti futuri
 
-- Un clamp “fino al bordo” **seguito da round-to-nearest** può invalidare il clamp. Dopo lo snap, **ri-verificare** l’AABB; se overflow, arrotondare **verso il basso**, non applicare la size richiesta.
-- Non usare “elemento già fuori → disable clamp” come scorciatoia: lo stato fuori può essere **errore numerico**, non intento utente. Recupera `start` dentro, poi limita `want`.
+- Un clamp “fino al bordo” **seguito da round-to-nearest** può invalidare il clamp. Dopo lo snap, **ri-verificare** l’overflow; se peggiora, arrotondare **verso il basso**, non applicare la size richiesta.
+- Non usare “elemento già fuori → disable clamp” come scorciatoia: lo stato fuori può essere **errore numerico**, non intento utente.
 - Bug **intermittenti** al confine: sospettare snap/float/`eps`, non il gesto del secondo drag in sé.
 - Verificare il **secondo** drag dopo uno stop al muro, non solo il primo.
+- **Non** recuperare un AABB “fuori” rimpicciolendo verso minSize.
 
 ## File coinvolti
 
-- [`index.html`](../index.html): `setElementSizeStoppedAtWall`, `applySnappedSizeInside`, `pullElementSizeInside`, `snapToPixelDown`.
+- [`index.html`](../index.html): `setElementSizeStoppedAtWall`, `applySnappedSizeInside`, `overflowNoWorseThan`, `snapToPixelDown`.
+
+---
+
+# Debug learnings: resize ruotato, angolo originale sul bordo → size ~0×0
+
+## Problema originale
+
+- **Sintomo**: elemento **ruotato**, punto di ancoraggio (angolo in alto a sinistra *locale*, quello che resta fisso nel resize) **sul bordo del canvas**. Al ridimensionamento, larghezza e altezza vanno a ~0.
+- **Contesto**: terza volta sul confine canvas. Stesso pezzo: `setElementSizeStoppedAtWall` + pin di `getLocalTopLeftWorld`.
+
+## Cosa causava il bug (causa vera — errore di base)
+
+Due vincoli insieme sono **incompatibili** dopo una rotazione:
+
+1. Il resize **fissa l’angolo originale** nello spazio canvas (non l’angolo AABB).
+2. Il clamp chiedeva **AABB interamente dentro** il canvas.
+
+Con rotazione intorno al centro, l’AABB sporge **oltre** quell’angolo. Se l’angolo è già sul muro, **nessuna size positiva** può avere AABB dentro: lo sbalzo cresce con w/h.
+
+Il recovery precedente (`pullElementSizeInside`) faceva binary search **da 0.2 cm**. Ogni candidato era “fuori”, `lo` restava 0, applicava minSize → collasso visivo a 0×0.
+
+Non era un altro bug di snap: era il test “dentro sì/no” applicato a una geometria che non può mai essere “dentro”.
+
+## Tentativi che **non** risolvono
+
+| Approccio | Perché non basta |
+|-----------|------------------|
+| Allargare `eps` a 1 px sul test “dentro” | Maschera overflow da snap, non il caso ruotato (sbalzo di centimetri). Può far accumulare overflow tra un drag e l’altro. |
+| Se `start` è fuori, congelare sempre la size | Evita il collasso ma impedisce anche lo **shrink** (che riduce lo sbalzo) e tratta “fuori per rotazione” come “bloccato”. |
+| Riportare dentro cercando da minSize | È il bug: più piccolo ≠ più dentro se l’ancora è sul muro. |
+| Lasciare `want` se `start` è fuori | Bug 2: sblocca l’uscita dal canvas. |
+
+## Fix finale (soluzione attuale)
+
+Vincolo: **non aumentare** l’overflow AABB rispetto alla size di partenza (`overflowNoWorseThan` + cap misurato su `start`).
+
+- Crescere fino a un altro muro: l’overflow su quel lato aumenta → binary search `start → want` si ferma.
+- Angolo originale sul bordo + rotazione: lo sbalzo su quel lato è già nel cap; una grow che lo **peggiora** resta a `start`; uno shrink che lo **riduce** è accettato.
+- Snap: nearest se non peggiora il cap, altrimenti floor, altrimenti unsapped, altrimenti `start`. Mai cercare da minSize.
+- Ctrl/Cmd resta libero.
+
+## Cosa imparare per agenti futuri
+
+- Pin angolo originale + “AABB ⊆ canvas” è un insieme **vuoto** per box ruotati con l’angolo sul muro. Il test giusto è **overflow non peggiore di start**.
+- Binary search da un `from` che **non** soddisfa il vincolo applica `from` (`lo=0`). Se `from` è minSize, collassi.
+- Terzo bug sullo stesso bordo: prima di un altro workaround, chiedere se il **predicato** del clamp è sbagliato, non solo lo snap/`eps`.
