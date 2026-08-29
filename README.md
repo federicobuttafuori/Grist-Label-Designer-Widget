@@ -32,7 +32,7 @@ A custom widget for Grist that allows you to design and print product labels dir
 
 You do **not** need to publish or install anything yourself. The widget is already hosted here:
 
-**[https://federicobuttafuori.github.io/grist-widget/](https://federicobuttafuori.github.io/grist-widget/)**
+**[https://federicobuttafuori.github.io/Grist-Label-Designer-Widget/](https://federicobuttafuori.github.io/Grist-Label-Designer-Widget/)**
 
 1. In your Grist document, add a widget to the page and choose **Custom widget** (or **Create custom widget**, depending on your Grist UI).
 2. When asked for the widget URL, **paste the link above** into the **Custom widget URL** field.
