@@ -986,6 +986,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
             return b.x >= -eps && b.y >= -eps && (b.x + b.width) <= W + eps && (b.y + b.height) <= H + eps;
         }
 
+        function snapToPixelDown(valueCm){
+            return Math.floor((Number(valueCm) || 0) * PIXELS_PER_CM) / PIXELS_PER_CM;
+        }
+
         function binarySearchFitSize(el, anchorTL, fromW, fromH, toW, toH){
             let lo = 0, hi = 1;
             for(let i = 0; i < 24; i++){
@@ -995,6 +999,29 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 else hi = mid;
             }
             setElementBoxKeepingLocalTopLeft(el, anchorTL, fromW + (toW - fromW) * lo, fromH + (toH - fromH) * lo);
+        }
+
+        function pullElementSizeInside(el, anchorTL, w, h){
+            const minSize = 0.2;
+            setElementBoxKeepingLocalTopLeft(el, anchorTL, Math.max(minSize, snapToPixelDown(w)), Math.max(minSize, snapToPixelDown(h)));
+            if(elementAabbInsideCanvas(el)) return;
+            binarySearchFitSize(el, anchorTL, minSize, h, w, h);
+            if(elementAabbInsideCanvas(el)) return;
+            const fittedW = el.width;
+            binarySearchFitSize(el, anchorTL, fittedW, minSize, fittedW, h);
+        }
+
+        function applySnappedSizeInside(el, anchorTL, w, h){
+            const minSize = 0.2;
+            w = Math.max(minSize, w);
+            h = Math.max(minSize, h);
+            setElementBoxKeepingLocalTopLeft(el, anchorTL, snapToPixel(w), snapToPixel(h));
+            if(elementAabbInsideCanvas(el)) return;
+            setElementBoxKeepingLocalTopLeft(el, anchorTL, Math.max(minSize, snapToPixelDown(w)), Math.max(minSize, snapToPixelDown(h)));
+            if(elementAabbInsideCanvas(el)) return;
+            setElementBoxKeepingLocalTopLeft(el, anchorTL, w, h);
+            if(elementAabbInsideCanvas(el)) return;
+            pullElementSizeInside(el, anchorTL, w, h);
         }
 
         // Resize: keep the original top-left corner fixed in canvas space
@@ -1007,13 +1034,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
             startH = Math.max(minSize, startH);
             setElementBoxKeepingLocalTopLeft(el, anchorTL, wantW, wantH);
             if(elementAabbInsideCanvas(el)){
-                setElementBoxKeepingLocalTopLeft(el, anchorTL, snapToPixel(wantW), snapToPixel(wantH));
+                applySnappedSizeInside(el, anchorTL, wantW, wantH);
                 return;
             }
             setElementBoxKeepingLocalTopLeft(el, anchorTL, startW, startH);
             if(!elementAabbInsideCanvas(el)){
-                setElementBoxKeepingLocalTopLeft(el, anchorTL, snapToPixel(wantW), snapToPixel(wantH));
-                return;
+                pullElementSizeInside(el, anchorTL, startW, startH);
+                startW = el.width;
+                startH = el.height;
             }
             if(el.lockAspectRatio){
                 binarySearchFitSize(el, anchorTL, startW, startH, wantW, wantH);
@@ -1033,12 +1061,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     }
                 }
             }
-            setElementBoxKeepingLocalTopLeft(
-                el,
-                anchorTL,
-                snapToPixel(Math.max(minSize, el.width)),
-                snapToPixel(Math.max(minSize, el.height))
-            );
+            applySnappedSizeInside(el, anchorTL, el.width, el.height);
         }
 
         function fitElementsInsideCanvas(els){
