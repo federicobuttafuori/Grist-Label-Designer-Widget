@@ -35,6 +35,35 @@
         .sidebar-section .sidebar-hint{color:#666;font-size:11px;margin-top:4px;display:block}
         .sidebar-section .sidebar-design-row{display:flex;gap:4px;align-items:center}
         .sidebar-section .sidebar-design-row select{flex:1;min-width:0}
+        .lp-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+        .profile-section{background:#f6f8fa;padding:10px;border:1px solid #d0d7de;border-radius:8px;gap:0}
+        #sidebar .profile-section h3{margin:0;font-size:12px;font-weight:600;color:#424a53;text-transform:uppercase;letter-spacing:.04em;border-bottom:none;padding-bottom:0}
+        .lp-block{display:flex;flex-direction:column;gap:5px}
+        .lp-block + .lp-block{margin-top:8px;padding-top:8px;border-top:1px solid #eef0f2}
+        .lp-design-head{display:flex;align-items:center;justify-content:space-between;gap:6px}
+        .lp-head-actions{display:flex;align-items:center;gap:4px}
+        .lp-head-btn,.lp-design-head #btn-add-design{appearance:none;font-size:11px;font-weight:600;padding:2px 8px;border:1px solid #c9d1d9;border-radius:5px;background:#fff;color:#424a53;cursor:pointer;line-height:1.3}
+        .lp-head-btn:hover,.lp-design-head #btn-add-design:hover{background:#f6f8fa;border-color:#afb8c1;color:#1f2328}
+        .lp-head-btn-danger{color:#b33c3c;border-color:#d8c8c8;background:#fff;font-weight:500}
+        .lp-head-btn-danger:hover{background:#faf6f6;border-color:#c9b0b0;color:#7a4545}
+        .lp-chips{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        .lp-chip{appearance:none;border:1px solid #d0d7de;background:#fff;color:#1f2328;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:600;cursor:grab;line-height:1.2;user-select:none;touch-action:none}
+        .lp-chip-x{font-weight:400;opacity:.7;padding:0 1px;pointer-events:none}
+        .lp-chip:hover{border-color:#6ba3dc;background:#f3f8fd}
+        .lp-chip.is-active{background:#d4e8fb;color:#0b4f9c;border-color:#6ba3dc}
+        .lp-chip.lp-dragging,.lp-design-item.lp-dragging{position:fixed;z-index:10050;margin:0;pointer-events:none;opacity:.95;box-shadow:0 6px 16px rgba(0,0,0,.2);cursor:grabbing}
+        .lp-drop-slot{display:inline-block;box-sizing:border-box;border:1px dashed #0969da;background:rgba(9,105,218,.08);border-radius:999px;flex-shrink:0;pointer-events:none;vertical-align:middle}
+        .lp-design-list .lp-drop-slot{display:block;width:100%!important;border-radius:4px}
+        #profile-size-chips{display:contents}
+        .lp-design-list{border:1px solid #d0d7de;border-radius:6px;overflow:auto;max-height:190px;background:#fff}
+        .lp-design-item{display:flex;align-items:center;justify-content:space-between;gap:6px;width:100%;padding:5px 10px;border:none;border-bottom:1px solid #eef0f2;background:#fff;cursor:grab;text-align:left;font-size:13px;color:#1f2328;user-select:none;touch-action:none}
+        .lp-design-item:last-child{border-bottom:none}
+        .lp-design-item:hover{background:#f6f8fa}
+        .lp-design-item.is-active{background:#f0f6ff;font-weight:600}
+        .lp-design-actions{display:flex;flex-wrap:wrap;gap:5px}
+        .lp-design-actions button{font-size:12px;padding:5px 9px;border:1px solid #d0d7de;border-radius:5px;background:#fff;cursor:pointer;color:#1f2328}
+        .lp-design-actions button:hover{background:#f6f8fa;border-color:#afb8c1}
+        .lp-design-actions .sidebar-btn-danger{background:#fff;border-color:#d9a0a0}
         .sidebar-section .sidebar-icon-btn{padding:0;width:32px;height:32px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box}
         #offset-profiles-modal{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:20000;display:none;align-items:center;justify-content:center;padding:16px}
         #offset-profiles-modal.offset-modal-open{display:flex}
@@ -57,7 +86,6 @@
         .sidebar-section .sidebar-btn-block.sidebar-btn-info{background:#007aff;color:#fff}
         .sidebar-section .sidebar-btn-danger{background:#fbebeb;border-color:#d9a0a0;color:#c00}
         .sidebar-section .sidebar-btn-danger:hover{background:#f7dada}
-        .profile-section{background:#f5f5f5;padding:10px;border-radius:6px;border:1px solid #e0e0e0}
         .profile-section select{margin-bottom:8px}
         .sidebar-section .add-buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px}
         .ie-section .ie-actions{display:flex;gap:8px}
@@ -229,12 +257,11 @@
         .status-message.error{background:#f44336}
             #mini-toolbar{display:none;gap:0;background:#fff;padding:6px 8px;border-bottom:1px solid #e0e0e0;flex-direction:column;align-items:stretch;justify-content:flex-start;flex-shrink:0;overflow-x:auto;overflow-y:hidden}
             #mini-toolbar .mini-toolbar-inner{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-rows:auto auto;gap:6px 10px;align-items:center;min-width:0;width:100%;max-width:100%}
-            #mini-toolbar .mini-tb-print{grid-column:1;grid-row:1}
+            #mini-toolbar .mini-tb-print{grid-column:1;grid-row:1 / span 2;align-self:stretch;display:flex;align-items:center}
             #mini-toolbar .mini-tb-profile{grid-column:2;grid-row:1;min-width:0}
-            #mini-toolbar .mini-tb-print1{grid-column:1;grid-row:2}
             #mini-toolbar .mini-tb-design{grid-column:2;grid-row:2;min-width:0}
             #mini-toolbar .mini-toolbar-col3{grid-column:3;grid-row:1 / span 2;display:flex;flex-direction:column;justify-content:flex-start;gap:6px;align-self:start;min-width:0}
-            #mini-toolbar .mini-tb-print button,#mini-toolbar .mini-tb-print1 button{padding:6px 10px;font-size:13px;white-space:nowrap}
+            #mini-toolbar .mini-tb-print button{padding:6px 10px;font-size:13px;white-space:nowrap}
             #mini-toolbar .mini-tb-profile select,#mini-toolbar .mini-tb-design select{width:100%;padding:4px 8px;font-size:12px;border:1px solid #ccc;border-radius:4px;background:#fff;box-sizing:border-box}
             #mini-toolbar .mini-toolbar-col3 select{width:100%;min-width:7em;padding:4px 8px;font-size:12px;border:1px solid #ccc;border-radius:4px;background:#fff;box-sizing:border-box}
             #mini-toolbar .mini-toolbar-col3 button{padding:6px 10px;font-size:13px;white-space:nowrap;align-self:stretch}
@@ -242,6 +269,34 @@
             .widget-mode #canvas-container #layer-stack-indicator{display:none!important}
             .widget-mode #canvas-container .group-bounds-frame{display:none!important}
             .widget-mode #canvas-container{cursor:default}
+        #print-seq-popup{background:#fff;border-radius:10px;padding:0;max-width:480px;width:92%;max-height:85vh;overflow:hidden;display:flex;flex-direction:column;border:1px solid #d0d7de}
+        #print-seq-popup .ps-head{padding:16px 20px 0}
+        #print-seq-popup .ps-head h3{margin:0;font-size:17px;font-weight:600;color:#1f2328}
+        #print-seq-popup .ps-tabs{display:flex;gap:4px;padding:12px 20px 0;border-bottom:1px solid #d0d7de}
+        #print-seq-popup .ps-tab{appearance:none;background:transparent;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;padding:8px 12px;font-size:13px;font-weight:600;color:#656d76;cursor:pointer}
+        #print-seq-popup .ps-tab.is-active{color:#0969da;border-bottom-color:#0969da}
+        #print-seq-popup .ps-panel{padding:16px 20px;overflow-y:auto;flex:1;min-height:160px}
+        #print-seq-popup .ps-wave{display:flex;align-items:center;gap:12px;padding:10px 12px;margin-bottom:8px;border:1px solid #d0d7de;border-radius:8px;background:#fff;cursor:pointer}
+        #print-seq-popup .ps-wave:hover{border-color:#0969da;background:#f6f8fa}
+        #print-seq-popup .ps-wave.is-all{background:#f6f8fa}
+        #print-seq-popup .ps-wave input{width:16px;height:16px;margin:0;accent-color:#0969da;flex-shrink:0}
+        #print-seq-popup .ps-wave-body{flex:1;min-width:0}
+        #print-seq-popup .ps-wave-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+        #print-seq-popup .ps-wave-top strong{font-size:14px;color:#1f2328}
+        #print-seq-popup .ps-badge{font-size:11px;color:#656d76;background:#f6f8fa;border:1px solid #d0d7de;padding:2px 8px;border-radius:999px;white-space:nowrap}
+        #print-seq-popup .ps-meta{font-size:12px;color:#656d76;margin-top:4px;display:flex;gap:14px}
+        #print-seq-popup .ps-empty{font-size:13px;color:#656d76;padding:8px 0}
+        #print-seq-popup .ps-hint{font-size:13px;color:#656d76;margin:0 0 14px}
+        #print-seq-popup .ps-fields{display:flex;gap:12px;flex-wrap:wrap}
+        #print-seq-popup .ps-field{display:flex;flex-direction:column;gap:4px;min-width:120px}
+        #print-seq-popup .ps-field span{font-size:12px;font-weight:600;color:#1f2328}
+        #print-seq-popup .ps-field input{padding:8px 10px;border:1px solid #d0d7de;border-radius:6px;font-size:14px}
+        #print-seq-popup .ps-field input:focus{outline:2px solid #0969da;outline-offset:0;border-color:#0969da}
+        #print-seq-popup .ps-foot{padding:12px 20px;border-top:1px solid #d0d7de;background:#f6f8fa;display:flex;gap:8px;justify-content:flex-end}
+        #print-seq-popup .ps-foot button{padding:8px 14px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600}
+        #print-seq-popup #wave-popup-cancel{background:#fff;color:#1f2328;border:1px solid #d0d7de}
+        #print-seq-popup #wave-popup-print{background:#0969da;color:#fff}
+        #print-seq-popup #wave-popup-print:disabled{opacity:.45;cursor:not-allowed}
         .column-mention-dropdown{position:fixed;z-index:10000;background:#fff;border:1px solid #ccc;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,.15);max-height:200px;overflow-y:auto;min-width:160px;display:none}
         .column-mention-dropdown.column-mention-dropdown-visible{display:block}
         .column-mention-dropdown-item{padding:8px 12px;cursor:pointer;font-size:14px;border-bottom:1px solid #f0f0f0}
@@ -296,7 +351,7 @@
         <button id="btn-clear" title="Clear Layout">🗑️ Clear</button>
         <div class="divider"></div>
         <button id="btn-print" title="Print Label">🖨️ Print</button>
-        <button id="btn-print-single" title="Print Single Label">🖨️ Print Single</button>
+        <button id="btn-print-single" title="Print Single Label" style="display:none">🖨️ Print Single</button>
             <div class="divider"></div>
             <button id="btn-rotate-canvas" title="Rotate Canvas 90° (temporary, not for print)">🔄 Rotate</button>
         <div class="divider"></div>
@@ -323,30 +378,40 @@
     <div id="main-content">
         <div id="sidebar">
                 <div class="sidebar-section profile-section">
-                    <h3>Label Profile</h3>
-                    <label>Size:</label>
-                    <select id="profile-selector">
-                        <option value="8x5">8 × 5 cm</option>
-                    </select>
-                <label>Design:</label>
-                <div class="sidebar-design-row">
-                    <select id="design-selector">
-                        <option value="default">Default</option>
-                    </select>
-                    <button type="button" id="btn-rename-design" class="sidebar-icon-btn" title="Rename Design">✏️</button>
-                    <button type="button" id="btn-clone-design" class="sidebar-icon-btn" title="Clone Design">📋</button>
-                    <button type="button" id="btn-offset-profiles" class="sidebar-icon-btn" title="Profili offset stampa">📍</button>
-                </div>
-                <div class="sidebar-btn-row">
-                    <button type="button" id="btn-add-profile">➕ Add Size</button>
-                    <button type="button" id="btn-add-design">➕ Add Design</button>
+                    <div class="lp-block lp-size-block">
+                        <div class="lp-design-head">
+                            <h3>Size</h3>
+                            <div class="lp-head-actions">
+                                <button type="button" id="btn-add-profile" class="lp-head-btn" title="Add size">Add</button>
+                                <button type="button" id="btn-remove-profile" class="lp-head-btn lp-head-btn-danger" title="Remove size">Remove</button>
+                            </div>
+                        </div>
+                        <div class="lp-chips">
+                            <div id="profile-size-chips"></div>
+                        </div>
+                        <select id="profile-selector" class="lp-sr" aria-label="Size">
+                            <option value="8x5">8 × 5 cm</option>
+                        </select>
                     </div>
-                <div class="sidebar-btn-row">
-                    <button type="button" id="btn-remove-profile" class="sidebar-btn-danger">🗑️ Remove Size</button>
-                    <button type="button" id="btn-remove-design" class="sidebar-btn-danger">🗑️ Remove Design</button>
+                    <div class="lp-block">
+                        <div class="lp-design-head">
+                            <h3>Designs</h3>
+                            <div class="lp-head-actions">
+                                <button type="button" id="btn-add-design" class="lp-head-btn" title="Add design">Add</button>
+                                <button type="button" id="btn-remove-design" class="lp-head-btn lp-head-btn-danger" title="Remove design">Remove</button>
+                            </div>
+                        </div>
+                        <div id="profile-design-list" class="lp-design-list" role="listbox" aria-label="Designs"></div>
+                        <select id="design-selector" class="lp-sr" aria-label="Design">
+                            <option value="default">Default</option>
+                        </select>
+                        <div class="lp-design-actions">
+                            <button type="button" id="btn-rename-design" title="Rename design">✏️ Rename</button>
+                            <button type="button" id="btn-clone-design" title="Clone design">📋 Clone</button>
+                            <button type="button" id="btn-offset-profiles" title="Print offset profiles">Offset</button>
+                        </div>
                     </div>
                 </div>
-                <hr>
             <div class="sidebar-section">
                 <h3>Add Element</h3>
                 <div class="add-buttons">
@@ -1580,12 +1645,135 @@ document.addEventListener('DOMContentLoaded', ()=>{
             }
         }
 
+        let lpReorder = { active: false, suppressClick: false };
+
+        function rebuildObjectOrder(obj, orderedKeys){
+            const next = {};
+            orderedKeys.forEach(k => {
+                if(Object.prototype.hasOwnProperty.call(obj, k)) next[k] = obj[k];
+            });
+            Object.keys(obj).forEach(k => {
+                if(!Object.prototype.hasOwnProperty.call(next, k)) next[k] = obj[k];
+            });
+            return next;
+        }
+
+        function bindLpReorder(root, itemSelector, keyAttr, axis, commit){
+            if(!root) return;
+            root.querySelectorAll(itemSelector).forEach(item => {
+                item.addEventListener('dragstart', (e) => { e.preventDefault(); });
+                item.addEventListener('pointerdown', (e) => {
+                    if(e.button !== 0) return;
+                    const startX = e.clientX;
+                    const startY = e.clientY;
+                    let dragging = false;
+                    let ph = null;
+                    let grabX = 0;
+                    let grabY = 0;
+                    let lastIdx = -1;
+                    let others = [];
+                    const onMove = (ev) => {
+                        if(!dragging){
+                            if(Math.hypot(ev.clientX - startX, ev.clientY - startY) < 6) return;
+                            dragging = true;
+                            lpReorder.active = true;
+                            const rect = item.getBoundingClientRect();
+                            grabX = ev.clientX - rect.left;
+                            grabY = ev.clientY - rect.top;
+                            others = [...root.querySelectorAll(itemSelector)].filter(el => el !== item);
+                            ph = document.createElement('span');
+                            ph.className = 'lp-drop-slot';
+                            ph.style.width = rect.width + 'px';
+                            ph.style.height = rect.height + 'px';
+                            item.parentNode.insertBefore(ph, item);
+                            item.style.width = rect.width + 'px';
+                            item.style.height = rect.height + 'px';
+                            item.classList.add('lp-dragging');
+                            try{ item.setPointerCapture(ev.pointerId); }catch(_err){}
+                        }
+                        ev.preventDefault();
+                        item.style.left = (ev.clientX - grabX) + 'px';
+                        item.style.top = (ev.clientY - grabY) + 'px';
+                        let idx = 0;
+                        others.forEach(other => {
+                            const r = other.getBoundingClientRect();
+                            if(axis === 'x'){
+                                if(r.bottom < ev.clientY) idx++;
+                                else if(r.top <= ev.clientY && (r.left + r.width / 2) < ev.clientX) idx++;
+                            } else if(r.top + r.height / 2 < ev.clientY){
+                                idx++;
+                            }
+                        });
+                        if(idx === lastIdx) return;
+                        lastIdx = idx;
+                        const beforeEl = others[idx];
+                        if(beforeEl){
+                            if(ph.nextSibling !== beforeEl) beforeEl.parentNode.insertBefore(ph, beforeEl);
+                        } else {
+                            const last = others[others.length - 1];
+                            if(last && last.nextSibling !== ph){
+                                last.parentNode.insertBefore(ph, last.nextSibling);
+                            }
+                        }
+                    };
+                    const onUp = () => {
+                        window.removeEventListener('pointermove', onMove);
+                        window.removeEventListener('pointerup', onUp);
+                        window.removeEventListener('pointercancel', onUp);
+                        if(dragging){
+                            if(ph && ph.parentNode){
+                                ph.parentNode.insertBefore(item, ph);
+                                ph.remove();
+                            }
+                            item.classList.remove('lp-dragging');
+                            item.style.left = '';
+                            item.style.top = '';
+                            item.style.width = '';
+                            item.style.height = '';
+                            lpReorder.active = false;
+                            lpReorder.suppressClick = true;
+                            commit();
+                            setTimeout(() => { lpReorder.suppressClick = false; }, 0);
+                        }
+                    };
+                    window.addEventListener('pointermove', onMove);
+                    window.addEventListener('pointerup', onUp);
+                    window.addEventListener('pointercancel', onUp);
+                });
+            });
+        }
+
         function updateProfileSelector(){
             const options = Object.keys(profiles).map(key => {
                 const p = profiles[key];
                 return `<option value="${key}" ${key===currentProfile?'selected':''}>${p.width} × ${p.height} cm</option>`;
             }).join('');
             profileSelector.innerHTML = options;
+
+            const chips = document.getElementById('profile-size-chips');
+            if(chips){
+                chips.innerHTML = Object.keys(profiles).map(key => {
+                    const p = profiles[key];
+                    const active = key === currentProfile ? ' is-active' : '';
+                    const label = `${p.width} × ${p.height}`;
+                    return `<button type="button" class="lp-chip${active}" data-profile-key="${escapeHtml(key)}" title="${escapeHtml(label)} cm">${p.width}<span class="lp-chip-x">×</span>${p.height}</button>`;
+                }).join('');
+                chips.querySelectorAll('[data-profile-key]').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        if(lpReorder.suppressClick) return;
+                        const key = btn.getAttribute('data-profile-key');
+                        if(!key || key === currentProfile) return;
+                        profileSelector.value = key;
+                        profileSelector.dispatchEvent(new Event('change'));
+                    });
+                });
+                bindLpReorder(chips, '[data-profile-key]', 'data-profile-key', 'x', () => {
+                    const keys = [...chips.querySelectorAll('[data-profile-key]')].map(el => el.getAttribute('data-profile-key'));
+                    profiles = rebuildObjectOrder(profiles, keys);
+                    saveCurrentDesign();
+                    updateProfileSelector();
+                });
+            }
             
             // Aggiorna anche il selettore nella mini toolbar se esiste
             const miniProfileSelect = document.getElementById('mini-profile-selector');
@@ -1601,6 +1789,37 @@ document.addEventListener('DOMContentLoaded', ()=>{
             return `<option value="${key}" ${key===currentDesign?'selected':''}>${key}</option>`;
         }).join('');
         designSelector.innerHTML = options;
+
+        const list = document.getElementById('profile-design-list');
+        if(list){
+            const keys = Object.keys(profile.designs);
+                list.innerHTML = keys.map(key => {
+                const active = key === currentDesign;
+                const safe = escapeHtml(key);
+                return `<button type="button" class="lp-design-item${active ? ' is-active' : ''}" data-design-key="${safe}" role="option" aria-selected="${active ? 'true' : 'false'}">${safe}</button>`;
+            }).join('');
+            list.querySelectorAll('[data-design-key]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    if(lpReorder.suppressClick) return;
+                    const key = btn.getAttribute('data-design-key');
+                    if(!key || key === currentDesign) return;
+                    designSelector.value = key;
+                    designSelector.dispatchEvent(new Event('change'));
+                });
+            });
+            bindLpReorder(list, '[data-design-key]', 'data-design-key', 'y', () => {
+                const profile = profiles[currentProfile];
+                if(!profile) return;
+                const keys = [...list.querySelectorAll('[data-design-key]')].map(el => el.getAttribute('data-design-key'));
+                profile.designs = rebuildObjectOrder(profile.designs, keys);
+                saveCurrentDesign();
+                updateDesignSelector();
+            });
+            const activeItem = list.querySelector('.lp-design-item.is-active');
+            if(activeItem && typeof activeItem.scrollIntoView === 'function'){
+                activeItem.scrollIntoView({ block: 'nearest' });
+            }
+        }
         
         // Aggiorna anche il selettore nella mini toolbar se esiste
         const miniDesignSelect = document.getElementById('mini-design-selector');
@@ -1609,14 +1828,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
         }
         
         updateCanvasControls();
-        // Sync button heights with select
-        setTimeout(() => {
-            const selectHeight = designSelector.offsetHeight;
-            const renameBtn = document.getElementById('btn-rename-design');
-            const cloneBtn = document.getElementById('btn-clone-design');
-            if(renameBtn && selectHeight) renameBtn.style.height = `${selectHeight}px`;
-            if(cloneBtn && selectHeight) cloneBtn.style.height = `${selectHeight}px`;
-        }, 0);
     }
 
         function updateCanvasControls(){
@@ -1703,6 +1914,34 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 void cc.offsetHeight;
                 fit();
             });
+        }
+
+        function cycleProfile(delta, opts){
+            const keys = Object.keys(profiles);
+            if(keys.length < 2) return;
+            const idx = keys.indexOf(currentProfile);
+            const from = idx < 0 ? 0 : idx;
+            const next = keys[(from + delta + keys.length) % keys.length];
+            if(!next || next === currentProfile) return;
+            switchProfile(next);
+            saveCurrentDesign();
+            if(opts && opts.focusChip){
+                const activeChip = document.querySelector('#profile-size-chips .lp-chip.is-active');
+                if(activeChip) activeChip.focus();
+            }
+        }
+
+        function cycleDesign(delta){
+            const profile = profiles[currentProfile];
+            if(!profile || !profile.designs) return;
+            const keys = Object.keys(profile.designs);
+            if(keys.length < 2) return;
+            const idx = keys.indexOf(currentDesign);
+            const from = idx < 0 ? 0 : idx;
+            const next = keys[(from + delta + keys.length) % keys.length];
+            if(!next || next === currentDesign) return;
+            switchDesign(next);
+            saveCurrentDesign();
         }
 
         function switchDesign(designKey){
@@ -1941,6 +2180,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
             selectedIds = [];
             // Reset history when switching design/profile/canvas
             resetHistory();
+            updatePrintButtonLabel();
         }
 
         function addProfile(){
@@ -3226,6 +3466,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         lc.style.height = `${H}cm`;
         updateLayerStackIndicator();
         if(bwModeEnabled) scheduleBwPreviewUpdate();
+        updatePrintButtonLabel();
     }
 
         // ---------- B&W thermal preview ----------
@@ -7995,189 +8236,235 @@ document.addEventListener('DOMContentLoaded', ()=>{
             }
         }
 
+        function isSequenceWorkflowColumnRef(ref){
+            if(!ref) return false;
+            if(String(ref).trim().toLowerCase() === 'sequence') return true;
+            if(globalSequenceCountColumn && areSameColumnRef(ref, globalSequenceCountColumn)) return true;
+            return (packWaves || []).some(w =>
+                (w.countColumn && areSameColumnRef(ref, w.countColumn)) ||
+                (w.weightColumn && areSameColumnRef(ref, w.weightColumn))
+            );
+        }
+
+        function stringUsesSequenceWorkflow(str){
+            if(!str || typeof str !== 'string') return false;
+            if(/@sequence@|\*\*sequence\*\*/i.test(str)) return true;
+            return columnRefsFromTextMentions(str).some(isSequenceWorkflowColumnRef);
+        }
+
+        function elementUsesSequenceWorkflow(el){
+            if(!el || !el.props) return false;
+            const p = el.props;
+            if(isSequenceWorkflowColumnRef(p.boundColumn)) return true;
+            return [p.text, p.prefix, p.suffix].some(stringUsesSequenceWorkflow);
+        }
+
+        function currentDesignUsesSequenceWorkflow(){
+            const profile = profiles[currentProfile];
+            const design = profile && profile.designs && profile.designs[currentDesign];
+            if(!design) return false;
+            const els = [].concat(design.canvas1 || [], design.canvas2 || []);
+            return els.some(elementUsesSequenceWorkflow);
+        }
+
+        function updatePrintButtonLabel(){
+            const seq = currentDesignUsesSequenceWorkflow();
+            const label = seq ? '🖨️ Print Sequence' : '🖨️ Print';
+            const title = seq ? 'Print Sequence' : 'Print Label';
+            const btn = document.getElementById('btn-print');
+            if(btn){
+                btn.textContent = label;
+                btn.title = title;
+            }
+            const mini = document.getElementById('mini-btn-print');
+            if(mini){
+                mini.textContent = label;
+                mini.title = title;
+            }
+            const single = document.getElementById('btn-print-single');
+            if(single) single.style.display = 'none';
+            const miniSingle = document.getElementById('mini-btn-print-single');
+            if(miniSingle) miniSingle.style.display = 'none';
+        }
+
         // Function to show wave selection popup
         function showWaveSelectionPopup(callback, canvas2Flag = false){
-            if(!packWaves || packWaves.length === 0){
-                callback([]); // No waves, return empty array to use default behavior
-                return;
-            }
-            
-            // Create popup overlay
+            const waves = packWaves || [];
+            const hasWaves = waves.length > 0;
+            const hasCountColumn = !!globalSequenceCountColumn;
+            let activeTab = (hasWaves || hasCountColumn) ? 'waves' : 'single';
+
             const overlay = document.createElement('div');
-            overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px);';
-            
-            // Create popup content
+            overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(31,35,40,0.45);z-index:10000;display:flex;align-items:center;justify-content:center;';
+
             const popup = document.createElement('div');
-            popup.style.cssText = 'background:#fff;border-radius:12px;padding:0;max-width:550px;width:90%;max-height:85vh;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.4);display:flex;flex-direction:column;';
-            
-            // Header
-            let html = '<div style="padding:20px 24px;border-bottom:1px solid #e0e0e0;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);">';
-            html += '<h3 style="margin:0;font-size:20px;font-weight:600;color:#fff;">Select Pack Wave to Print</h3>';
-            html += '</div>';
-            
-            // Content area
-            html += '<div style="padding:20px 24px;overflow-y:auto;flex:1;">';
-            
-            // Calculate total labels for "All Waves" option
+            popup.id = 'print-seq-popup';
+
+            function formatWeight(weight){
+                if(weight === null || weight === undefined || weight === '') return '—';
+                if(typeof weight === 'number') return Math.round(weight) + ' g';
+                return String(weight) + ' g';
+            }
+
             let totalLabelsAllWaves = 0;
-            
-            // Build wave list with weight and count info
-            packWaves.forEach((wave, index) => {
+            let wavesHtml = '';
+            waves.forEach((wave, index) => {
                 const countValue = getRecordValueByColumnRef(wave.countColumn);
                 const weightValue = getRecordValueByColumnRef(wave.weightColumn);
                 const count = (wave.countColumn && countValue.found) ?
                     Math.max(0, Math.floor(Number(countValue.value))) : 0;
-                const weight = (wave.weightColumn && weightValue.found) ?
-                    weightValue.value : null;
-                
-                // Calculate total labels for this wave (considering canvas2Flag)
+                const weight = (wave.weightColumn && weightValue.found) ? weightValue.value : null;
                 const totalLabels = canvas2Flag ? count * 2 : count;
                 totalLabelsAllWaves += totalLabels;
-                
-                // Display weight in grams (direct value, not converted)
-                let weightDisplay = '—';
-                if(weight !== null && weight !== undefined && weight !== ''){
-                    if(typeof weight === 'number'){
-                        // Show as grams (direct value)
-                        weightDisplay = Math.round(weight) + ' g';
-                    } else {
-                        weightDisplay = String(weight) + ' g';
-                    }
-                }
-                
-                html += `<div class="wave-option" style="margin-bottom:12px;padding:16px;background:#f8f9fa;border-radius:8px;border:2px solid #e0e0e0;transition:all 0.2s;cursor:pointer;">`;
-                html += `<label style="display:flex;align-items:center;cursor:pointer;margin:0;">`;
-                html += `<input type="radio" name="wave-selection" value="${index}" style="margin-right:14px;width:18px;height:18px;cursor:pointer;accent-color:#667eea;">`;
-                html += `<div style="flex:1;">`;
-                html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">`;
-                html += `<strong style="font-size:16px;color:#333;font-weight:600;">Wave ${index + 1}</strong>`;
-                html += `<span style="font-size:12px;color:#666;background:#e9ecef;padding:4px 8px;border-radius:4px;">${totalLabels} labels</span>`;
-                html += `</div>`;
-                html += `<div style="font-size:14px;color:#666;display:flex;gap:16px;">`;
-                html += `<span><strong>Weight:</strong> ${weightDisplay}</span>`;
-                html += `<span><strong>Count:</strong> ${count}</span>`;
-                html += `</div>`;
-                html += `</div>`;
-                html += `</label>`;
-                html += `</div>`;
+                wavesHtml += `<label class="ps-wave">`;
+                wavesHtml += `<input type="radio" name="wave-selection" value="${index}">`;
+                wavesHtml += `<div class="ps-wave-body">`;
+                wavesHtml += `<div class="ps-wave-top"><strong>Wave ${index + 1}</strong><span class="ps-badge">${totalLabels} labels</span></div>`;
+                wavesHtml += `<div class="ps-meta"><span>Weight ${formatWeight(weight)}</span><span>Count ${count}</span></div>`;
+                wavesHtml += `</div></label>`;
             });
-            
-            // Add "All waves" option
-            html += `<div class="wave-option wave-option-all" style="margin-bottom:0;padding:16px;background:linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);border-radius:8px;border:2px solid #ffb74d;transition:all 0.2s;cursor:pointer;">`;
-            html += `<label style="display:flex;align-items:center;cursor:pointer;margin:0;">`;
-            html += `<input type="radio" name="wave-selection" value="all" checked style="margin-right:14px;width:18px;height:18px;cursor:pointer;accent-color:#ff9800;">`;
-            html += `<div style="flex:1;">`;
-            html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">`;
-            html += `<strong style="font-size:16px;color:#e65100;font-weight:600;">All Waves</strong>`;
-            html += `<span style="font-size:12px;color:#bf360c;background:#ffe0b2;padding:4px 8px;border-radius:4px;font-weight:600;">${totalLabelsAllWaves} labels</span>`;
-            html += `</div>`;
-            html += `<div style="font-size:14px;color:#bf360c;margin-top:4px;">Print all waves in sequence</div>`;
-            html += `</div>`;
-            html += `</label>`;
-            html += `</div>`;
-            
-            html += '</div>'; // Close content area
-            
-            // Footer with buttons
-            html += '<div style="padding:16px 24px;border-top:1px solid #e0e0e0;background:#f8f9fa;display:flex;gap:12px;justify-content:flex-end;">';
-            html += `<button id="wave-popup-cancel" style="padding:10px 20px;background:#6c757d;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:500;transition:background 0.2s;">Cancel</button>`;
-            html += `<button id="wave-popup-print" style="padding:10px 24px;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;box-shadow:0 2px 8px rgba(102,126,234,0.3);transition:transform 0.2s,box-shadow 0.2s;">Print</button>`;
-            html += `</div>`;
-            
-            popup.innerHTML = html;
+            if(hasWaves){
+                wavesHtml += `<label class="ps-wave is-all">`;
+                wavesHtml += `<input type="radio" name="wave-selection" value="all" checked>`;
+                wavesHtml += `<div class="ps-wave-body">`;
+                wavesHtml += `<div class="ps-wave-top"><strong>All waves</strong><span class="ps-badge">${totalLabelsAllWaves} labels</span></div>`;
+                wavesHtml += `<div class="ps-meta">Print every wave in order</div>`;
+                wavesHtml += `</div></label>`;
+            } else if(hasCountColumn){
+                const globalCountValue = getRecordValueByColumnRef(globalSequenceCountColumn);
+                const count = (globalCountValue.found) ? Math.max(0, Math.floor(Number(globalCountValue.value))) : 0;
+                const totalLabels = canvas2Flag ? count * 2 : count;
+                wavesHtml += `<label class="ps-wave is-all">`;
+                wavesHtml += `<input type="radio" name="wave-selection" value="count-column" checked>`;
+                wavesHtml += `<div class="ps-wave-body">`;
+                wavesHtml += `<div class="ps-wave-top"><strong>Print all</strong><span class="ps-badge">${totalLabels} labels</span></div>`;
+                wavesHtml += `<div class="ps-meta">Full sequence from the count column</div>`;
+                wavesHtml += `</div></label>`;
+            }
+            if(!wavesHtml){
+                wavesHtml = '<p class="ps-empty">No pack waves configured. Use Print Single for one label.</p>';
+            }
+
+            popup.innerHTML =
+                '<div class="ps-head"><h3>Print Sequence</h3></div>' +
+                '<div class="ps-tabs">' +
+                    '<button type="button" class="ps-tab' + (activeTab === 'waves' ? ' is-active' : '') + '" data-ps-tab="waves">Waves</button>' +
+                    '<button type="button" class="ps-tab' + (activeTab === 'single' ? ' is-active' : '') + '" data-ps-tab="single">Print Single</button>' +
+                '</div>' +
+                '<div class="ps-panel" id="ps-panel-waves"' + (activeTab === 'waves' ? '' : ' hidden') + '>' + wavesHtml + '</div>' +
+                '<div class="ps-panel" id="ps-panel-single"' + (activeTab === 'single' ? '' : ' hidden') + '>' +
+                    '<p class="ps-hint">One label. Count is the sequence number; weight overrides the column for this print.</p>' +
+                    '<div class="ps-fields">' +
+                        '<label class="ps-field"><span>Count</span><input id="print-single-count" type="number" min="1" step="1" inputmode="numeric" placeholder="e.g. 1"></label>' +
+                        '<label class="ps-field"><span>Weight</span><input id="print-single-weight" type="text" inputmode="decimal" placeholder="e.g. 150"></label>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="ps-foot">' +
+                    '<button type="button" id="wave-popup-cancel">Cancel</button>' +
+                    '<button type="button" id="wave-popup-print">Print waves</button>' +
+                '</div>';
+
             overlay.appendChild(popup);
             document.body.appendChild(overlay);
-            
-            // Add hover effects for wave options
-            const waveOptions = popup.querySelectorAll('.wave-option');
-            waveOptions.forEach(option => {
-                option.addEventListener('mouseenter', function() {
-                    if(!this.classList.contains('wave-option-all')){
-                        this.style.borderColor = '#667eea';
-                        this.style.background = '#f0f4ff';
-                    }
-                });
-                option.addEventListener('mouseleave', function() {
-                    if(!this.classList.contains('wave-option-all')){
-                        this.style.borderColor = '#e0e0e0';
-                        this.style.background = '#f8f9fa';
-                    }
-                });
-                // Make entire card clickable
-                option.addEventListener('click', function(e) {
-                    if(e.target.tagName !== 'INPUT' && e.target.tagName !== 'LABEL'){
-                        const radio = this.querySelector('input[type="radio"]');
-                        if(radio){
-                            radio.checked = true;
-                        }
-                    }
-                });
-            });
-            
-            // Add hover effects for buttons
+
             const cancelBtn = popup.querySelector('#wave-popup-cancel');
             const printBtn = popup.querySelector('#wave-popup-print');
-            
-            cancelBtn.addEventListener('mouseenter', function() {
-                this.style.background = '#5a6268';
+            const singleCountInput = popup.querySelector('#print-single-count');
+            const singleWeightInput = popup.querySelector('#print-single-weight');
+            const panelWaves = popup.querySelector('#ps-panel-waves');
+            const panelSingle = popup.querySelector('#ps-panel-single');
+
+            function setTab(tab){
+                activeTab = tab;
+                popup.querySelectorAll('.ps-tab').forEach(btn => {
+                    btn.classList.toggle('is-active', btn.getAttribute('data-ps-tab') === tab);
+                });
+                if(panelWaves) panelWaves.hidden = tab !== 'waves';
+                if(panelSingle) panelSingle.hidden = tab !== 'single';
+                printBtn.textContent = tab === 'single' ? 'Print one' : 'Print waves';
+                syncPopupPrintEnabled();
+                if(tab === 'single' && singleCountInput) singleCountInput.focus();
+            }
+
+            function syncPopupPrintEnabled(){
+                if(activeTab === 'single'){
+                    const countOk = singleCountInput && Number(singleCountInput.value) >= 1;
+                    const weightOk = singleWeightInput && String(singleWeightInput.value).trim() !== '';
+                    printBtn.disabled = !(countOk && weightOk);
+                    return;
+                }
+                const selected = popup.querySelector('input[name="wave-selection"]:checked');
+                printBtn.disabled = !selected;
+            }
+
+            popup.querySelectorAll('.ps-tab').forEach(btn => {
+                btn.addEventListener('click', () => setTab(btn.getAttribute('data-ps-tab')));
             });
-            cancelBtn.addEventListener('mouseleave', function() {
-                this.style.background = '#6c757d';
+            popup.querySelectorAll('input[name="wave-selection"]').forEach(radio => {
+                radio.addEventListener('change', syncPopupPrintEnabled);
             });
-            
-            printBtn.addEventListener('mouseenter', function() {
-                this.style.transform = 'translateY(-1px)';
-                this.style.boxShadow = '0 4px 12px rgba(102,126,234,0.4)';
-            });
-            printBtn.addEventListener('mouseleave', function() {
-                this.style.transform = 'translateY(0)';
-                this.style.boxShadow = '0 2px 8px rgba(102,126,234,0.3)';
-            });
-            
+            if(singleCountInput) singleCountInput.addEventListener('input', syncPopupPrintEnabled);
+            if(singleWeightInput) singleWeightInput.addEventListener('input', syncPopupPrintEnabled);
+            setTab(activeTab);
+
             const closePopup = () => {
-                document.body.removeChild(overlay);
+                if(overlay.parentNode) document.body.removeChild(overlay);
+                document.removeEventListener('keydown', handleEscape);
             };
-            
+
             cancelBtn.addEventListener('click', () => {
                 closePopup();
-                callback(null); // User cancelled
+                callback(null);
             });
-            
+
             printBtn.addEventListener('click', () => {
-                const selected = popup.querySelector('input[name="wave-selection"]:checked');
-                if(selected){
-                    if(selected.value === 'all'){
-                        closePopup();
-                        callback(packWaves.map((_, i) => i)); // Return all wave indices
-                    } else {
-                        const waveIndex = parseInt(selected.value);
-                        if(!isNaN(waveIndex) && waveIndex >= 0 && waveIndex < packWaves.length){
-                            closePopup();
-                            callback([waveIndex]); // Return single wave index
-                        }
+                if(printBtn.disabled) return;
+                if(activeTab === 'single'){
+                    const sequenceIndex = Math.max(1, Math.floor(Number(singleCountInput && singleCountInput.value)));
+                    const overrideWeight = singleWeightInput ? String(singleWeightInput.value).trim() : '';
+                    if(!Number.isFinite(sequenceIndex) || sequenceIndex < 1 || !overrideWeight){
+                        msg('Fill Count and Weight to print a single label', true);
+                        return;
                     }
+                    closePopup();
+                    callback({ type: 'single', sequenceIndex, overrideWeight });
+                    return;
+                }
+                const selected = popup.querySelector('input[name="wave-selection"]:checked');
+                if(!selected) return;
+                if(selected.value === 'count-column'){
+                    closePopup();
+                    callback({ type: 'count-column' });
+                    return;
+                }
+                if(selected.value === 'all'){
+                    closePopup();
+                    callback({ type: 'waves', indices: waves.map((_, i) => i) });
+                    return;
+                }
+                const waveIndex = parseInt(selected.value, 10);
+                if(!isNaN(waveIndex) && waveIndex >= 0 && waveIndex < waves.length){
+                    closePopup();
+                    callback({ type: 'waves', indices: [waveIndex] });
                 }
             });
-            
-            // Close on overlay click
+
             overlay.addEventListener('click', (e) => {
                 if(e.target === overlay){
                     closePopup();
                     callback(null);
                 }
             });
-            
-            // Close on Escape key
+
             const handleEscape = (e) => {
                 if(e.key === 'Escape'){
                     closePopup();
                     callback(null);
-                    document.removeEventListener('keydown', handleEscape);
                 }
             };
             document.addEventListener('keydown', handleEscape);
         }
-        
+
         // Function to print selected waves
         function printSelectedWaves(selectedWaveIndices, profile, design, canvas2Flag, prevSel, prevCanvas, prevS){
             // Create print container
@@ -8739,7 +9026,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
             });
         }
         
-        function printBothCanvases(){
+        function printBothCanvases(options){
+            options = options || {};
             const profile = profiles[currentProfile];
             if(!profile || !profile.designs[currentDesign]) return;
             const design = profile.designs[currentDesign];
@@ -8752,24 +9040,35 @@ document.addEventListener('DOMContentLoaded', ()=>{
             const prevSel = deepCopy(selectedIds);
             const prevCanvas = currentCanvas;
             const prevS = deepCopy(S);
-            
-            // Check if we have pack waves configured
-            if(packWaves && packWaves.length > 0){
-                // Show wave selection popup
-                showWaveSelectionPopup((selectedWaveIndices) => {
-                    if(selectedWaveIndices === null){
-                        // User cancelled
+
+            if(!options.fromCountColumn && !currentDesignUsesSequenceWorkflow()){
+                printSingle({ sequenceIndex: 1, skipPrompts: true });
+                return;
+            }
+
+            if(!options.fromCountColumn){
+                showWaveSelectionPopup((result) => {
+                    if(!result) return;
+                    if(result.type === 'single'){
+                        printSingle({
+                            sequenceIndex: result.sequenceIndex,
+                            overrideWeight: result.overrideWeight,
+                            skipPrompts: true
+                        });
                         return;
                     }
-                    
-                    // Proceed with printing selected waves
-                    printSelectedWaves(selectedWaveIndices, profile, design, canvas2Flag, prevSel, prevCanvas, prevS);
+                    if(result.type === 'waves'){
+                        printSelectedWaves(result.indices, profile, design, canvas2Flag, prevSel, prevCanvas, prevS);
+                        return;
+                    }
+                    if(result.type === 'count-column'){
+                        printBothCanvases({ fromCountColumn: true });
+                    }
                 }, canvas2Flag);
                 return;
             }
             
-            // No waves configured - use default behavior with globalSequenceCountColumn
-            // Sequence mode is always enabled
+            // Count-column batch print (no pack waves)
             const sequenceEnabled = true;
             // Validate sequence mode
             if(!globalSequenceCountColumn){
@@ -9330,7 +9629,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
             });
     }
 
-    function printSingle(){
+    function printSingle(opts){
+        opts = opts || {};
         try {
             const profile = profiles[currentProfile];
             if(!profile || !profile.designs[currentDesign]) {
@@ -9340,19 +9640,28 @@ document.addEventListener('DOMContentLoaded', ()=>{
             const design = profile.designs[currentDesign];
             const canvas2Flag = design.canvas2Enabled || false;
             
-            // Ask user for sequence number and optional weight override
-            const sequenceInput = prompt('Enter sequence number:', '1');
-            if(sequenceInput === null) return; // User cancelled
-            
-            const sequenceIndex = Math.max(1, Math.floor(Number(sequenceInput)));
-            if(isNaN(sequenceIndex) || sequenceIndex < 1){
-                msg('Error: Invalid sequence number', true);
-                return;
+            let sequenceIndex;
+            let overrideWeight;
+            if(opts.skipPrompts){
+                sequenceIndex = Math.max(1, Math.floor(Number(opts.sequenceIndex != null ? opts.sequenceIndex : 1)));
+                if(!Number.isFinite(sequenceIndex) || sequenceIndex < 1){
+                    msg('Error: Invalid count', true);
+                    return;
+                }
+                const weightInput = opts.overrideWeight;
+                overrideWeight = (weightInput !== undefined && weightInput !== null && String(weightInput).trim() !== '') ? String(weightInput).trim() : undefined;
+            } else {
+                const sequenceInput = prompt('Enter sequence number:', '1');
+                if(sequenceInput === null) return;
+                sequenceIndex = Math.max(1, Math.floor(Number(sequenceInput)));
+                if(isNaN(sequenceIndex) || sequenceIndex < 1){
+                    msg('Error: Invalid sequence number', true);
+                    return;
+                }
+                const weightInput = prompt('Enter weight (optional – overrides weight column for this print). Leave empty to use column value:', '');
+                if(weightInput === null) return;
+                overrideWeight = String(weightInput).trim() !== '' ? String(weightInput).trim() : undefined;
             }
-            
-            const weightInput = prompt('Enter weight (optional – overrides weight column for this print). Leave empty to use column value:', '');
-            if(weightInput === null) return; // User cancelled
-            const overrideWeight = String(weightInput).trim() !== '' ? String(weightInput).trim() : undefined;
             
             // Save current canvas
             saveCurrentDesign();
@@ -10379,40 +10688,53 @@ document.addEventListener('DOMContentLoaded', ()=>{
             }
 
         if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
-                    // Only handle arrow keys in full screen mode
-                    if (!isFullScreen) return;
-                    
-                // Don't move elements if user is interacting with form controls
-                // Exception: allow font select navigation (handled separately with stopPropagation)
-                if(e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'SELECT'){
-                if(selectedIds.length>0){
-                    e.preventDefault();
-                        // Convert step from pixels to cm (1cm = 37.795276px at 96 DPI)
-                        // Use 1 pixel for normal step, 5 pixels for shift+arrow
-                        const pixelsPerCm = 37.795276;
-                        const stepPixels = e.shiftKey ? 5 : 1;
-                        const step = stepPixels / pixelsPerCm;
-                    pushBeforeChange();
-                    const free = isUnconstrainedPointer(e);
-                    let dx = 0, dy = 0;
-                    switch(e.key){
-                        case 'ArrowUp': dy = -step; break;
-                        case 'ArrowDown': dy = step; break;
-                        case 'ArrowLeft': dx = -step; break;
-                        case 'ArrowRight': dx = step; break;
-                    }
-                    const items = snapshotItemsByIds(expandIdsWithGroups(selectedIds));
-                    applyPartitionedTranslation(items, dx, dy, free);
-                    refreshGroupBoundsForItems(items);
-                        const seenThreadArrow = new Set();
-                        selectedIds.forEach(id=>{
-                            const el = S.find(s=>s.id===id);
-                            if(!el || !el.masterThreadId || seenThreadArrow.has(el.masterThreadId)) return;
-                            seenThreadArrow.add(el.masterThreadId);
-                            syncThreadPositionFromElementIfSynced(el);
-                        });
-                        render(); updateProps(); saveCurrentDesign();
+            if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT'){
+                return;
+            }
+            const inSizeUi = !!(e.target.closest && (
+                e.target.closest('#profile-size-chips') ||
+                e.target.closest('#profile-selector') ||
+                e.target.closest('#mini-profile-selector') ||
+                (e.target.closest('.lp-size-block') && !e.target.closest('#btn-add-profile, #btn-remove-profile'))
+            ));
+            const inDesignUi = !!(e.target.closest && e.target.closest('#profile-design-list, #design-selector, #mini-design-selector'));
+            const delta = (e.key === 'ArrowDown' || e.key === 'ArrowRight') ? 1 : -1;
+            if(e.shiftKey){
+                e.preventDefault();
+                cycleProfile(delta, { focusChip: inSizeUi });
+            } else if(inSizeUi){
+                e.preventDefault();
+                cycleProfile(delta, { focusChip: true });
+            } else if(inDesignUi || selectedIds.length === 0){
+                e.preventDefault();
+                cycleDesign(delta);
+            } else {
+                if (!isFullScreen) return;
+                e.preventDefault();
+                // Convert step from pixels to cm (1cm = 37.795276px at 96 DPI)
+                // Use 1 pixel for normal step, 5 pixels for shift+arrow
+                const pixelsPerCm = 37.795276;
+                const step = 1 / pixelsPerCm;
+                pushBeforeChange();
+                const free = isUnconstrainedPointer(e);
+                let dx = 0, dy = 0;
+                switch(e.key){
+                    case 'ArrowUp': dy = -step; break;
+                    case 'ArrowDown': dy = step; break;
+                    case 'ArrowLeft': dx = -step; break;
+                    case 'ArrowRight': dx = step; break;
                 }
+                const items = snapshotItemsByIds(expandIdsWithGroups(selectedIds));
+                applyPartitionedTranslation(items, dx, dy, free);
+                refreshGroupBoundsForItems(items);
+                const seenThreadArrow = new Set();
+                selectedIds.forEach(id=>{
+                    const el = S.find(s=>s.id===id);
+                    if(!el || !el.masterThreadId || seenThreadArrow.has(el.masterThreadId)) return;
+                    seenThreadArrow.add(el.masterThreadId);
+                    syncThreadPositionFromElementIfSynced(el);
+                });
+                render(); updateProps(); saveCurrentDesign();
             }
         }
 
@@ -11268,7 +11590,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         printBothCanvases();
     });
     document.getElementById('btn-print-single').addEventListener('click', ()=>{
-        printSingle();
+        printBothCanvases();
     });
         document.getElementById('btn-rotate-canvas').addEventListener('click', ()=>{
             canvasRotation = (canvasRotation + 90) % 360;
@@ -11679,13 +12001,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     col3.appendChild(canvasSelect);
                     col3.appendChild(btnRotate);
 
-                    const btnPrintSingle = document.getElementById('btn-print-single').cloneNode(true);
-                    btnPrintSingle.id = 'mini-btn-print-single';
-                    btnPrintSingle.addEventListener('click', () => document.getElementById('btn-print-single').click());
-                    const wrapPrint1 = document.createElement('div');
-                    wrapPrint1.className = 'mini-tb-print1';
-                    wrapPrint1.appendChild(btnPrintSingle);
-
                     const designSelect = document.createElement('select');
                     designSelect.id = 'mini-design-selector';
                     designSelect.addEventListener('change', (e) => {
@@ -11699,7 +12014,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     inner.appendChild(wrapPrint);
                     inner.appendChild(wrapProfile);
                     inner.appendChild(col3);
-                    inner.appendChild(wrapPrint1);
                     inner.appendChild(wrapDesign);
                     miniToolbar.appendChild(inner);
                     mainContent.insertBefore(miniToolbar, canvasContainer);
@@ -11727,6 +12041,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 syncMiniCanvasSelector();
                 
                 miniToolbar.style.display = 'flex';
+                updatePrintButtonLabel();
                 
                 // Fit canvas to window after layout update (considerando la toolbar)
                 setTimeout(() => {
@@ -12205,17 +12520,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
         
         // Check full screen mode on initial load
         checkFullScreenMode();
-        
-        // Sync button heights with select on initial load
-        setTimeout(() => {
-            const selectHeight = designSelector.offsetHeight;
-            const renameBtn = document.getElementById('btn-rename-design');
-            const cloneBtn = document.getElementById('btn-clone-design');
-            const offsetPb = document.getElementById('btn-offset-profiles');
-            if(renameBtn && selectHeight) renameBtn.style.height = `${selectHeight}px`;
-            if(cloneBtn && selectHeight) cloneBtn.style.height = `${selectHeight}px`;
-            if(offsetPb && selectHeight) offsetPb.style.height = `${selectHeight}px`;
-        }, 100);
 
 }); // DOMContentLoaded
 </script>

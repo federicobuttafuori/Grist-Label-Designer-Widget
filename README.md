@@ -24,8 +24,8 @@ A custom widget for Grist that allows you to design and print product labels dir
 - **Text rules**: Regex-based transformations for automatic formatting
 
 ### Printing
-- **Batch print**: Print multiple labels at once
-- **Single print**: Print individual labels
+- **Print**: one label, when the design has no sequence/wave fields
+- **Print Sequence**: waves plus Print Single (count and weight), when the design uses sequences
 - **Thermal optimization**: Controls tailored for thermal printers
 
 ## Using the widget in Grist
@@ -50,5 +50,5 @@ You do **not** need to publish or install anything yourself. The widget is alrea
    - Configure properties in the sidebar
 
 3. **Print**:
-   - Use "Print" for label batches
-   - Use "Single Print" for one label
+   - Use **Print** for a simple one-off label
+   - Use **Print Sequence** when the design uses sequence or pack-wave fields
