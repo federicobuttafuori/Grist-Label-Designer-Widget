@@ -96,6 +96,7 @@
         .prop-aspect-link-btn.active{color:#1565c0;border-color:#1565c0;background:#e8f0fe}
         .prop-rotate-90-btn{width:28px;height:28px;padding:0;border:1px solid #ccc;border-radius:4px;cursor:pointer;font-size:16px;line-height:1;display:inline-flex;align-items:center;justify-content:center;background:#f5f5f5;flex-shrink:0;color:#333}
         .prop-rotate-90-btn:hover{background:#e8e8e8;border-color:#aaa}
+        .prop-rotate-90-btns{display:inline-flex;align-items:center;gap:4px;flex-shrink:0}
         #properties-panel{font-size:14px}
         .prop-border-sides{display:grid;grid-template-columns:1fr 26px 1fr 26px;gap:8px;align-items:center;margin-top:8px}
         .prop-border-sides label{font-size:12px;font-weight:normal;display:flex;align-items:center;gap:4px;min-width:0}
@@ -860,14 +861,47 @@ document.addEventListener('DOMContentLoaded', ()=>{
             return Math.max(0, finiteNumber(el && el.props && el.props.thickness, 2));
         }
 
+        // Visual box used for hit, move, rotate, resize. Line height in data is
+        // ~0.02cm but CSS paints thickness in px — those must stay in sync.
+        function elementLayoutSize(el){
+            const width = Number(el && el.width) || 0;
+            if(el && el.type === 'line'){
+                return { width, height: lineThicknessPx(el) / PIXELS_PER_CM };
+            }
+            return { width, height: Number(el && el.height) || 0 };
+        }
+
+        function applyLineElementStyles(d, el){
+            const lineColor = (el && el.props && el.props.color) || '#000000';
+            const thick = lineThicknessPx(el);
+            d.style.background = lineColor;
+            d.style.backgroundColor = lineColor;
+            d.style.height = `${thick}px`;
+            d.style.width = `${el.width}cm`;
+            d.style.display = 'block';
+            d.style.margin = '0';
+            d.style.padding = '0';
+            d.style.minHeight = `${thick}px`;
+            if(el && el.props && el.props.showBorder){
+                d.style.boxSizing = 'content-box';
+                d.style.overflow = 'visible';
+                d.style.maxHeight = '';
+            } else {
+                d.style.border = 'none';
+                d.style.boxSizing = 'border-box';
+                d.style.maxHeight = `${thick}px`;
+            }
+        }
+
         function getElementRotationDeg(el){
             return Number(el && el.props && el.props.rotation) || 0;
         }
 
         function getElementCenter(el){
+            const size = elementLayoutSize(el);
             return {
-                x: (Number(el.x) || 0) + (Number(el.width) || 0) / 2,
-                y: (Number(el.y) || 0) + (Number(el.height) || 0) / 2
+                x: (Number(el.x) || 0) + size.width / 2,
+                y: (Number(el.y) || 0) + size.height / 2
             };
         }
 
@@ -886,8 +920,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
         function getElementCorners(el){
             const x = Number(el.x) || 0;
             const y = Number(el.y) || 0;
-            const w = Number(el.width) || 0;
-            const h = Number(el.height) || 0;
+            const size = elementLayoutSize(el);
+            const w = size.width;
+            const h = size.height;
             const rad = getElementRotationDeg(el) * Math.PI / 180;
             const c = { x: x + w / 2, y: y + h / 2 };
             const pts = [
@@ -909,10 +944,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
         // (the same corner after rotation, not the AABB top-left).
         function setElementBoxKeepingLocalTopLeft(el, anchorTL, w, h){
             const minSize = 0.2;
+            const line = !!(el && el.type === 'line');
             w = Math.max(minSize, Number(w) || minSize);
-            h = Math.max(minSize, Number(h) || minSize);
-            el.width = w;
-            el.height = h;
+            if(line){
+                h = elementLayoutSize(el).height;
+                el.width = w;
+            } else {
+                h = Math.max(minSize, Number(h) || minSize);
+                el.width = w;
+                el.height = h;
+            }
             const ax = Number(anchorTL && anchorTL.x);
             const ay = Number(anchorTL && anchorTL.y);
             const tlx = Number.isFinite(ax) ? ax : (Number(el.x) || 0);
@@ -972,9 +1013,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
             const p = worldToLocalPoint(el, x, y);
             const ex = Number(el.x) || 0;
             const ey = Number(el.y) || 0;
-            const w = Number(el.width) || 0;
-            const h = Number(el.height) || 0;
-            return p.x >= ex && p.x <= ex + w && p.y >= ey && p.y <= ey + h;
+            const size = elementLayoutSize(el);
+            let hitH = size.height;
+            if(el.type === 'line'){
+                const slop = 8 / PIXELS_PER_CM;
+                hitH = Math.max(size.height, slop);
+            }
+            const padY = (hitH - size.height) / 2;
+            return p.x >= ex && p.x <= ex + size.width && p.y >= ey - padY && p.y <= ey + size.height + padY;
         }
 
         function polygonsIntersect(polyA, polyB){
@@ -1055,16 +1101,17 @@ document.addEventListener('DOMContentLoaded', ()=>{
             if(!el) return;
             const minSize = 0.2;
             if(Number.isFinite(Number(el.width))) el.width = Math.max(minSize, Number(el.width));
-            if(Number.isFinite(Number(el.height))) el.height = Math.max(minSize, Number(el.height));
+            if(el.type !== 'line' && Number.isFinite(Number(el.height))) el.height = Math.max(minSize, Number(el.height));
+            const size = elementLayoutSize(el);
             const bounds = getRotatedBounds(el);
             const ew = bounds.width, eh = bounds.height;
-            const minX = (ew - el.width) / 2;
-            const maxX = W - (ew + el.width) / 2;
-            const minY = (eh - el.height) / 2;
-            const maxY = H - (eh + el.height) / 2;
-            if(maxX < minX) el.x = (W - el.width) / 2;
+            const minX = (ew - size.width) / 2;
+            const maxX = W - (ew + size.width) / 2;
+            const minY = (eh - size.height) / 2;
+            const maxY = H - (eh + size.height) / 2;
+            if(maxX < minX) el.x = (W - size.width) / 2;
             else el.x = Math.max(minX, Math.min(el.x, maxX));
-            if(maxY < minY) el.y = (H - el.height) / 2;
+            if(maxY < minY) el.y = (H - size.height) / 2;
             else el.y = Math.max(minY, Math.min(el.y, maxY));
             el.x = snapToPixel(el.x);
             el.y = snapToPixel(el.y);
@@ -1107,11 +1154,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
         function applySnappedSizeInside(el, anchorTL, w, h, fallbackW, fallbackH, overflowCap){
             const minSize = 0.2;
+            const line = !!(el && el.type === 'line');
             w = Math.max(minSize, w);
-            h = Math.max(minSize, h);
+            if(line) h = elementLayoutSize(el).height;
+            else h = Math.max(minSize, h);
             setElementBoxKeepingLocalTopLeft(el, anchorTL, snapToPixel(w), snapToPixel(h));
             if(overflowNoWorseThan(el, overflowCap)) return;
-            setElementBoxKeepingLocalTopLeft(el, anchorTL, Math.max(minSize, snapToPixelDown(w)), Math.max(minSize, snapToPixelDown(h)));
+            setElementBoxKeepingLocalTopLeft(el, anchorTL, Math.max(minSize, snapToPixelDown(w)), line ? h : Math.max(minSize, snapToPixelDown(h)));
             if(overflowNoWorseThan(el, overflowCap)) return;
             setElementBoxKeepingLocalTopLeft(el, anchorTL, w, h);
             if(overflowNoWorseThan(el, overflowCap)) return;
@@ -1126,10 +1175,17 @@ document.addEventListener('DOMContentLoaded', ()=>{
         // collapses the element to ~0.
         function setElementSizeStoppedAtWall(el, anchorTL, startW, startH, wantW, wantH){
             const minSize = 0.2;
+            const line = !!(el && el.type === 'line');
+            const layoutH = line ? elementLayoutSize(el).height : null;
             wantW = Math.max(minSize, wantW);
-            wantH = Math.max(minSize, wantH);
             startW = Math.max(minSize, startW);
-            startH = Math.max(minSize, startH);
+            if(line){
+                wantH = layoutH;
+                startH = layoutH;
+            } else {
+                wantH = Math.max(minSize, wantH);
+                startH = Math.max(minSize, startH);
+            }
 
             setElementBoxKeepingLocalTopLeft(el, anchorTL, startW, startH);
             const overflowCap = aabbCanvasOverflow(el);
@@ -1187,13 +1243,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
         }
 
         function originLimitsForElement(el){
+            const size = elementLayoutSize(el);
             const bounds = getRotatedBounds(el);
             const ew = bounds.width, eh = bounds.height;
             return {
-                minX: (ew - el.width) / 2,
-                maxX: W - (ew + el.width) / 2,
-                minY: (eh - el.height) / 2,
-                maxY: H - (eh + el.height) / 2
+                minX: (ew - size.width) / 2,
+                maxX: W - (ew + size.width) / 2,
+                minY: (eh - size.height) / 2,
+                maxY: H - (eh + size.height) / 2
             };
         }
 
@@ -2648,8 +2705,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
         if(!el) return false;
         const local = worldToLocalPoint(el, x, y);
         const handleHalfCm = 6 / PIXELS_PER_CM;
-        const right = el.x + el.width;
-        const bottom = el.y + el.height;
+        const size = elementLayoutSize(el);
+        const right = el.x + size.width;
+        const bottom = el.y + size.height;
         return local.x >= right - handleHalfCm && local.x <= right + handleHalfCm && local.y >= bottom - handleHalfCm && local.y <= bottom + handleHalfCm;
     }
 
@@ -2863,10 +2921,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     break;
                 }
                 case 'line':
-                    d.style.backgroundColor = el.props.color || '#000000';
-                    d.style.height = `${lineThicknessPx(el)}px`;
-                    d.style.width = `${el.width}cm`;
-                        d.style.border = 'none'; // No border for lines - thickness controls height
+                    applyLineElementStyles(d, el);
                     break;
                 case 'box':
                     break;
@@ -4856,7 +4911,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
     function propRotationFieldHtml(gridCls, labelCls, propKey, val, syncHtml){
         const v = val !== undefined && val !== null && val !== '' ? val : 0;
-        return `<div class="${gridCls}"><label class="${labelCls}">Rotation°</label><div style="display:flex;align-items:center;gap:8px;min-width:0"><input type="number" step="1" data-prop="${propKey}" value="${v}" style="flex:1;min-width:0"><button type="button" class="prop-rotate-90-btn" title="+90° (Shift: −90°)">↻</button></div>${syncHtml || ''}</div>`;
+        return `<div class="${gridCls}"><label class="${labelCls}">Rotation°</label><div style="display:flex;align-items:center;gap:8px;min-width:0"><input type="number" step="1" data-prop="${propKey}" value="${v}" style="flex:1;min-width:0"><span class="prop-rotate-90-btns"><button type="button" class="prop-rotate-90-btn" data-rotate-delta="-90" title="−90°">↺</button><button type="button" class="prop-rotate-90-btn" data-rotate-delta="90" title="+90°">↻</button></span></div>${syncHtml || ''}</div>`;
     }
     function bindRotationNudgeButtons(scope, getElements){
         if(!scope) return;
@@ -4864,7 +4919,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
             btn.addEventListener('click', function(ev){
                 ev.preventDefault();
                 ev.stopPropagation();
-                const delta = ev.shiftKey ? -90 : 90;
+                const raw = Number(btn.getAttribute('data-rotate-delta'));
+                const delta = Number.isFinite(raw) ? raw : 90;
                 const row = btn.closest('.prop-grid');
                 const input = row && row.querySelector('input[data-prop*="rotation"]');
                 const targets = getElements().filter(e => e && e.props);
@@ -4950,7 +5006,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
         let h = `<div class="${grid1Cls}"><label class="${labelClass('x')}">X</label><input type="number" step="0.01" data-prop="x" value="${(Number(valueFor('x'))||0).toFixed(2)}">${syncBtn('x')}</div>`;
         h += `<div class="${grid1Cls}"><label class="${labelClass('y')}">Y</label><input type="number" step="0.01" data-prop="y" value="${(Number(valueFor('y'))||0).toFixed(2)}">${syncBtn('y')}</div>`;
         h += `<div class="${grid1Cls}"><label class="${labelClass('width')}">Width</label><input type="number" step="0.01" data-prop="width" value="${(Number(valueFor('width'))||0).toFixed(2)}">${syncBtn('width')}</div>`;
-        h += `<div class="${grid1Cls}"><label class="${labelClass('height')}">Height</label><div style="display:flex;align-items:center;gap:8px;min-width:0"><input type="number" step="0.01" data-prop="height" value="${(Number(valueFor('height'))||0).toFixed(2)}" style="flex:1;min-width:0"><button type="button" class="prop-aspect-link-btn ${el.lockAspectRatio ? 'active' : ''}" id="prop-aspect-link-toggle" title="Se attivo, modifica larghezza o altezza e l&apos;altra dimensione segue (anche trascinando l&apos;angolo)">🔗</button></div>${syncBtn('height')}</div><hr>`;
+        h += `<div class="${grid1Cls}"><label class="${labelClass('height')}">Height</label><div style="display:flex;align-items:center;gap:8px;min-width:0"><input type="number" step="0.01" data-prop="height" value="${(Number(valueFor('height'))||0).toFixed(2)}" style="flex:1;min-width:0"><button type="button" class="prop-aspect-link-btn ${el.lockAspectRatio ? 'active' : ''}" id="prop-aspect-link-toggle" title="Se attivo, modifica larghezza o altezza e l&apos;altra dimensione segue (anche trascinando l&apos;angolo)">🔗</button></div>${syncBtn('height')}</div>`;
+        h += `${propRotationFieldHtml(grid1Cls, labelClass('props.rotation'), 'props.rotation', valueFor('props.rotation') || 0, syncBtn('props.rotation'))}<hr>`;
 
         if(el.type==='text'){
             h += `<div class="${grid1Cls}"><label class="${labelClass('props.text')}">Text</label><textarea data-prop="props.text" class="column-mention-input" data-column-mention="1">${escapeHtml(String(valueFor('props.text')||''))}</textarea>${syncBtn('props.text')}</div>`;
@@ -5001,7 +5058,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
         if(el.type==='line'){
                 h += `<label>Thickness (px)</label><input type="number" step="1" data-prop="props.thickness" value="${el.props.thickness!==undefined?el.props.thickness:2}" min="0">`;
-                h += `<hr>${propRotationFieldHtml('prop-grid', '', 'props.rotation', el.props.rotation||0, '<label></label>')}`;
         }
 
         if(el.type==='box'){
@@ -5024,8 +5080,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     `<p style="font-size:11px;color:#666;margin:0">Stabilizza luminosità e contrasto per stampa termica.</p>`);
                 const mT = valueFor('props.marginTop'), mR = valueFor('props.marginRight'), mB = valueFor('props.marginBottom'), mL = valueFor('props.marginLeft');
                 h += `<hr><div style="margin-top:8px"><label style="font-size:12px;display:block;margin-bottom:6px">Margini (cm)</label><div class="${grid1Cls}"><label>Su</label><input type="number" step="0.01" data-prop="props.marginTop" value="${Number(mT||0).toFixed(2)}" min="0"><label>Destra</label><input type="number" step="0.01" data-prop="props.marginRight" value="${Number(mR||0).toFixed(2)}" min="0"><label>Giu</label><input type="number" step="0.01" data-prop="props.marginBottom" value="${Number(mB||0).toFixed(2)}" min="0"><label>Sinistra</label><input type="number" step="0.01" data-prop="props.marginLeft" value="${Number(mL||0).toFixed(2)}" min="0"></div></div>`;
-                const rotImgVal = valueFor('props.rotation');
-                h += `<hr>${propRotationFieldHtml(grid1Cls, labelClass('props.rotation'), 'props.rotation', rotImgVal || 0, syncBtn('props.rotation'))}`;
             }
 
             if(el.type==='text' || el.type==='data'){
@@ -5037,7 +5091,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 h += `<div class="${grid1Cls}"><label class="${labelClass('props.lineHeight')}">Line Height</label><input type="number" step="0.1" data-prop="props.lineHeight" value="${lineHVal!==undefined?lineHVal:1.2}" min="0.5" max="3">${syncBtn('props.lineHeight')}</div>`;
                 h += `<div class="${grid1Cls}"><label class="${labelClass('props.letterSpacing')}">Letter spacing (px)</label><input type="number" step="0.1" data-prop="props.letterSpacing" value="${letterSpacingVal!==undefined?letterSpacingVal:0}">${syncBtn('props.letterSpacing')}</div>`;
                 h += `<div class="${grid1Cls}"><label class="${labelClass('props.color')}">Colore</label><input type="color" data-prop="props.color" value="${valueFor('props.color')||'#000000'}">${syncBtn('props.color')}</div>`;
-                const taVal = valueFor('props.textAlign'); const vaVal = valueFor('props.valign'); const overflowVal = valueFor('props.textOverflow'); const rotVal = valueFor('props.rotation');
+                const taVal = valueFor('props.textAlign'); const vaVal = valueFor('props.valign'); const overflowVal = valueFor('props.textOverflow');
                 h += `<div class="${grid1Cls}"><label class="${labelClass('props.textAlign')}">H. Align</label><select data-prop="props.textAlign"><option value="left" ${taVal==='left'?'selected':''}>Left</option><option value="center" ${taVal==='center'?'selected':''}>Center</option><option value="right" ${taVal==='right'?'selected':''}>Right</option></select>${syncBtn('props.textAlign')}</div>`;
                 h += `<div class="${grid1Cls}"><label class="${labelClass('props.valign')}">V. Align</label><select data-prop="props.valign"><option value="top" ${vaVal==='top'?'selected':''}>Top</option><option value="middle" ${vaVal==='middle'?'selected':''}>Middle</option><option value="bottom" ${vaVal==='bottom'?'selected':''}>Bottom</option></select>${syncBtn('props.valign')}</div>`;
                 h += `<div class="${grid1Cls}"><label class="${labelClass('props.textOverflow')}">Overflow</label><select data-prop="props.textOverflow"><option value="clip" ${(overflowVal||'clip')==='clip'?'selected':''}>Clip (default)</option><option value="auto-scale" ${overflowVal==='auto-scale'?'selected':''}>Auto-scale to fit</option><option value="squeeze" ${overflowVal==='squeeze'?'selected':''}>Horizontal squeeze</option></select>${syncBtn('props.textOverflow')}</div>`;
@@ -5046,7 +5100,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     const fmtChecked = fmtMeasureVal !== false;
                     h += `<div class="${grid1Cls} overflow-measure-row"><label class="${labelClass('props.textOverflowFormattedMeasure')}" title="Attivo: misura con clone DOM (regex, grassetto, italic, ecc.). Spento: misura legacy solo testo piano.">Misura regex</label><label class="prop-feature-switch" title="Misura formattata (clone DOM)"><input type="checkbox" data-prop="props.textOverflowFormattedMeasure" ${fmtChecked ? 'checked' : ''}><span class="prop-feature-switch-ui"></span></label>${syncBtn('props.textOverflowFormattedMeasure')}</div>`;
                 }
-                h += propRotationFieldHtml(grid1Cls, labelClass('props.rotation'), 'props.rotation', rotVal || 0, syncBtn('props.rotation'));
                 const ptVal = valueFor('props.paddingTop'); const prVal = valueFor('props.paddingRight'); const pbVal = valueFor('props.paddingBottom'); const plVal = valueFor('props.paddingLeft');
                 h += `<hr><div class="${grid1Cls}"><label class="${labelClass('props.paddingTop')}">Padding Top</label><input type="number" step="0.01" data-prop="props.paddingTop" value="${Number(ptVal||0).toFixed(2)}" min="0">${syncBtn('props.paddingTop')}</div>`;
                 h += `<div class="${grid1Cls}"><label class="${labelClass('props.paddingRight')}">Padding Right</label><input type="number" step="0.01" data-prop="props.paddingRight" value="${Number(prVal||0).toFixed(2)}" min="0">${syncBtn('props.paddingRight')}</div>`;
@@ -5607,7 +5660,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
         h += `<div class="prop-grid"><label>X</label><input type="number" step="0.01" data-prop="multi.x" value="${common('x')}"></div>`;
         h += `<div class="prop-grid"><label>Y</label><input type="number" step="0.01" data-prop="multi.y" value="${common('y')}"></div>`;
         h += `<div class="prop-grid"><label>Width</label><input type="number" step="0.01" data-prop="multi.width" value="${common('width')}"></div>`;
-        h += `<div class="prop-grid"><label>Height</label><div style="display:flex;align-items:center;gap:8px;min-width:0"><input type="number" step="0.01" data-prop="multi.height" value="${common('height')}" style="flex:1;min-width:0"><button type="button" class="prop-aspect-link-btn ${allLockedAspect ? 'active' : ''}" id="multi-prop-aspect-link-toggle" title="Blocca/sblocca proporzioni su tutti gli elementi selezionati">🔗</button></div></div><hr>`;
+        h += `<div class="prop-grid"><label>Height</label><div style="display:flex;align-items:center;gap:8px;min-width:0"><input type="number" step="0.01" data-prop="multi.height" value="${common('height')}" style="flex:1;min-width:0"><button type="button" class="prop-aspect-link-btn ${allLockedAspect ? 'active' : ''}" id="multi-prop-aspect-link-toggle" title="Blocca/sblocca proporzioni su tutti gli elementi selezionati">🔗</button></div></div>`;
+        h += `${propRotationFieldHtml('prop-grid', '', 'multi.props.rotation', common('props.rotation'), '')}<hr>`;
 
         if(hasTextOrData){
             h += `<div class="prop-grid"><label>Font Size</label><input type="number" step="0.1" data-prop="multi.props.fontSize" value="${common('props.fontSize')}" min="6"></div>`;
@@ -5641,7 +5695,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
         h += `<div class="prop-grid"><label>Padding Right</label><input type="number" step="0.01" data-prop="multi.props.paddingRight" value="${common('props.paddingRight')}" min="0"></div>`;
         h += `<div class="prop-grid"><label>Padding Bottom</label><input type="number" step="0.01" data-prop="multi.props.paddingBottom" value="${common('props.paddingBottom')}" min="0"></div>`;
         h += `<div class="prop-grid"><label>Padding Left</label><input type="number" step="0.01" data-prop="multi.props.paddingLeft" value="${common('props.paddingLeft')}" min="0"></div>`;
-        h += `<div class="prop-grid"><label>Rotation°</label><div style="display:flex;align-items:center;gap:8px;min-width:0"><input type="number" step="1" data-prop="multi.props.rotation" value="${common('props.rotation')}" style="flex:1;min-width:0"><button type="button" class="prop-rotate-90-btn" title="+90° (Shift: −90°)">↻</button></div></div>`;
 
         let borderBody = `<div class="prop-feature-row-color"><label>Colore</label><input type="color" data-prop="multi.props.borderColor" value="${common('props.borderColor')||'#000000'}"></div>`;
         borderBody += `<div class="prop-grid"><label>Spessore</label><input type="number" step="0.1" data-prop="multi.props.borderWidth" value="${common('props.borderWidth')}" min="0"></div>`;
@@ -6137,6 +6190,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
             n.props.showBorder = true;
             n.props.borderWidth = 2;
             n.props.borderColor = '#000000';
+            n.props.fillEnabled = true;
+            n.props.fillColor = '#ffffff';
         }
             if(type==='image'){ n.width=2;n.height=2; n.props.objectFit='contain' }
         S.push(n);
@@ -6145,11 +6200,20 @@ document.addEventListener('DOMContentLoaded', ()=>{
             saveCurrentDesign();
     }
 
+    function placeCopiesOnTopPreservingOrder(copies, maxExistingZ){
+        if(!copies.length) return;
+        const minZ = copies.reduce((m, el) => Math.min(m, Number(el.zIndex) || 0), Number(copies[0].zIndex) || 0);
+        copies.forEach(copy => {
+            copy.zIndex = (maxExistingZ + 1) + ((Number(copy.zIndex) || 0) - minZ);
+        });
+    }
+
     function dupSelected(){
         if(selectedIds.length===0) return;
         pushBeforeChange();
         const mz = S.length>0 ? Math.max(...S.map(e=>e.zIndex||0)) : 0;
         const newIds = [];
+        const copies = [];
         selectedIds.forEach((id, idx)=>{
             const el = S.find(e=>e.id===id);
             if(!el) return;
@@ -6157,11 +6221,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
             copy.id = `el_${Date.now()}_${idx}`;
             copy.x = el.x + 0.2;
             copy.y = el.y + 0.2;
-            copy.zIndex = mz + idx + 1;
-            S.push(copy);
+            copies.push(copy);
             newIds.push(copy.id);
         });
-        fitElementsInsideCanvas(newIds.map(id => S.find(e => e.id === id)).filter(Boolean));
+        placeCopiesOnTopPreservingOrder(copies, mz);
+        copies.forEach(copy => S.push(copy));
+        fitElementsInsideCanvas(copies);
         setSelection(newIds);
             saveCurrentDesign();
             saveCurrentDesign();
@@ -6198,13 +6263,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
             copy.id = `el_${Date.now()}_${idx}`;
             copy.x = el.x + 0.2;
             copy.y = el.y + 0.2;
-            copy.zIndex = mz + idx + 1;
             if(el.masterThreadId){
                 copy.masterThreadId = el.masterThreadId;
             }
             copies.push(copy);
             newIds.push(copy.id);
         });
+        placeCopiesOnTopPreservingOrder(copies, mz);
         fitElementsInsideCanvas(copies);
         copies.forEach(copy => S.push(copy));
         setSelection(newIds);
@@ -8316,24 +8381,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
                             break;
                         }
                         case 'line':
-                            // For lines, use explicit background color and ensure visibility
-                            const lineColor = el.props.color || '#000000';
-                            d.style.background = lineColor;
-                            d.style.backgroundColor = lineColor;
-                            d.style.height = `${lineThicknessPx(el)}px`;
-                            d.style.width = `${el.width}cm`;
-                            d.style.border = 'none';
-                            d.style.display = 'block';
-                            d.style.margin = '0';
-                            d.style.padding = '0';
-                            d.style.overflow = 'visible';
-                            d.style.minHeight = `${lineThicknessPx(el)}px`;
-                            d.style.maxHeight = `${lineThicknessPx(el)}px`;
-                            d.style.boxSizing = 'border-box';
-                            // Force browsers to print background colors
+                            applyLineElementStyles(d, el);
                             d.style.printColorAdjust = 'exact';
                             d.style.webkitPrintColorAdjust = 'exact';
-                            // Add a non-breaking space to ensure the div has content (invisible but ensures rendering)
                             d.innerHTML = '&nbsp;';
                             d.style.color = 'transparent';
                             d.style.fontSize = '0';
@@ -8929,24 +8979,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
                             break;
                         }
                         case 'line':
-                            // For lines, use explicit background color and ensure visibility
-                            const lineColor = el.props.color || '#000000';
-                            d.style.background = lineColor;
-                            d.style.backgroundColor = lineColor;
-                            d.style.height = `${lineThicknessPx(el)}px`;
-                            d.style.width = `${el.width}cm`;
-                            d.style.border = 'none';
-                            d.style.display = 'block';
-                            d.style.margin = '0';
-                            d.style.padding = '0';
-                            d.style.overflow = 'visible';
-                            d.style.minHeight = `${lineThicknessPx(el)}px`;
-                            d.style.maxHeight = `${lineThicknessPx(el)}px`;
-                            d.style.boxSizing = 'border-box';
-                            // Force browsers to print background colors
+                            applyLineElementStyles(d, el);
                             d.style.printColorAdjust = 'exact';
                             d.style.webkitPrintColorAdjust = 'exact';
-                            // Add a non-breaking space to ensure the div has content (invisible but ensures rendering)
                             d.innerHTML = '&nbsp;';
                             d.style.color = 'transparent';
                             d.style.fontSize = '0';
@@ -9509,10 +9544,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                         break;
                     }
                     case 'line':
-                        d.style.background = el.props.color || '#000000';
-                        d.style.height = `${lineThicknessPx(el)}px`;
-                        d.style.width = `${el.width}cm`;
-                        d.style.border = 'none';
+                        applyLineElementStyles(d, el);
                         break;
                     case 'box':
                         d.style.backgroundColor = boxFillBackgroundCss(el.props);
@@ -9800,6 +9832,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
         // Allow starting marquee selection from outside the canvas
         function startMarqueeSelection(e){
             // start marquee - compute coordinates relative to canvas-container (so zoom & transform do not misplace)
+            drag = false;
+            resizeMode = false;
+            ctx = {};
             const containerRect = cc.getBoundingClientRect();
             marqueeActive = true;
             marqueeStart.clientX = e.clientX;
@@ -9924,6 +9959,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
             if(!id){
                 beginBackgroundPointer(e);
+                e.stopPropagation();
                 return;
             }
 
@@ -9989,12 +10025,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     }
                 } else if(!isGrouped && selectedIds.length <= 1){
                     resizeMode = true;
+                    const layout = elementLayoutSize(clickedElement);
                     ctx = {
                         el: clickedElement,
                         startX: clickedElement.x,
                         startY: clickedElement.y,
-                        startWidth: clickedElement.width,
-                        startHeight: clickedElement.height,
+                        startWidth: layout.width,
+                        startHeight: layout.height,
                         startMouseX: smx,
                         startMouseY: smy,
                         isGroup: false,
@@ -10017,6 +10054,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
             pushBeforeChange();
         }
         e.preventDefault();
+        e.stopPropagation();
     });
 
     window.addEventListener('mousemove', (e)=>{
@@ -10042,6 +10080,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
             marquee.style.top = `${top}px`;
             marquee.style.width = `${width}px`;
             marquee.style.height = `${height}px`;
+            return;
+        }
+
+        if((drag || resizeMode) && e.buttons === 0){
+            drag = false;
+            resizeMode = false;
+            ctx = {};
             return;
         }
 
@@ -10139,8 +10184,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
             const local = localDeltaFromWorldDelta(ctx.el, worldDx, worldDy);
             let nw = ctx.startWidth + local.x;
             let nh = ctx.startHeight + local.y;
-            
-            if(e.shiftKey){
+            if(ctx.el.type === 'line'){
+                nh = ctx.startHeight;
+            } else if(e.shiftKey){
                 if(Math.abs(local.x) >= Math.abs(local.y)){
                     nh = ctx.startHeight;
                 } else {
@@ -10148,7 +10194,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 }
             }
             
-            if(ctx.el.lockAspectRatio && ctx.startWidth > 0 && ctx.startHeight > 0){
+            if(ctx.el.type !== 'line' && ctx.el.lockAspectRatio && ctx.startWidth > 0 && ctx.startHeight > 0){
                 const scale = nw / ctx.startWidth;
                 nw = ctx.startWidth * scale;
                 nh = ctx.startHeight * scale;
@@ -10233,6 +10279,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
             marqueeActive = false;
             marquee.style.display = 'none';
+            drag = false;
+            resizeMode = false;
+            ctx = {};
+            pendingSelectClick = null;
+            dragMoved = false;
             render();
             updateProps();
             updateBtns();
