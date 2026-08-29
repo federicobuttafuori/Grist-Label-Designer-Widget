@@ -810,6 +810,36 @@ document.addEventListener('DOMContentLoaded', ()=>{
             return pts.map(p => rotatePointAround(p.x, p.y, c.x, c.y, rad));
         }
 
+        function getLocalTopLeftWorld(el){
+            const tl = getElementCorners(el)[0];
+            return tl ? { x: tl.x, y: tl.y } : { x: Number(el.x) || 0, y: Number(el.y) || 0 };
+        }
+
+        // Keep the element's original top-left corner fixed in canvas space
+        // (the same corner after rotation, not the AABB top-left).
+        function setElementBoxKeepingLocalTopLeft(el, anchorTL, w, h){
+            const minSize = 0.2;
+            w = Math.max(minSize, Number(w) || minSize);
+            h = Math.max(minSize, Number(h) || minSize);
+            el.width = w;
+            el.height = h;
+            const ax = Number(anchorTL && anchorTL.x);
+            const ay = Number(anchorTL && anchorTL.y);
+            const tlx = Number.isFinite(ax) ? ax : (Number(el.x) || 0);
+            const tly = Number.isFinite(ay) ? ay : (Number(el.y) || 0);
+            const rad = getElementRotationDeg(el) * Math.PI / 180;
+            if(!rad){
+                el.x = tlx;
+                el.y = tly;
+                return;
+            }
+            const hw = w / 2;
+            const hh = h / 2;
+            const rotatedHalf = rotatePointAround(hw, hh, 0, 0, rad);
+            el.x = tlx - hw + rotatedHalf.x;
+            el.y = tly - hh + rotatedHalf.y;
+        }
+
         function aabbFromPoints(pts){
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
             (pts || []).forEach(p => {
@@ -956,73 +986,59 @@ document.addEventListener('DOMContentLoaded', ()=>{
             return b.x >= -eps && b.y >= -eps && (b.x + b.width) <= W + eps && (b.y + b.height) <= H + eps;
         }
 
-        function binarySearchFitSize(el, originX, originY, fromW, fromH, toW, toH){
+        function binarySearchFitSize(el, anchorTL, fromW, fromH, toW, toH){
             let lo = 0, hi = 1;
             for(let i = 0; i < 24; i++){
                 const mid = (lo + hi) / 2;
-                el.x = originX;
-                el.y = originY;
-                el.width = fromW + (toW - fromW) * mid;
-                el.height = fromH + (toH - fromH) * mid;
+                setElementBoxKeepingLocalTopLeft(el, anchorTL, fromW + (toW - fromW) * mid, fromH + (toH - fromH) * mid);
                 if(elementAabbInsideCanvas(el)) lo = mid;
                 else hi = mid;
             }
-            el.x = originX;
-            el.y = originY;
-            el.width = fromW + (toW - fromW) * lo;
-            el.height = fromH + (toH - fromH) * lo;
+            setElementBoxKeepingLocalTopLeft(el, anchorTL, fromW + (toW - fromW) * lo, fromH + (toH - fromH) * lo);
         }
 
-        // Resize: keep origin (x,y) fixed and stop growth at the canvas edge.
-        // Never shift the opposite side to make room.
-        function setElementSizeStoppedAtWall(el, originX, originY, startW, startH, wantW, wantH){
+        // Resize: keep the original top-left corner fixed in canvas space
+        // and stop growth at the canvas edge. Never shift that corner to make room.
+        function setElementSizeStoppedAtWall(el, anchorTL, startW, startH, wantW, wantH){
             const minSize = 0.2;
             wantW = Math.max(minSize, wantW);
             wantH = Math.max(minSize, wantH);
             startW = Math.max(minSize, startW);
             startH = Math.max(minSize, startH);
-            el.x = originX;
-            el.y = originY;
-            el.width = wantW;
-            el.height = wantH;
+            setElementBoxKeepingLocalTopLeft(el, anchorTL, wantW, wantH);
             if(elementAabbInsideCanvas(el)){
-                el.width = snapToPixel(wantW);
-                el.height = snapToPixel(wantH);
+                setElementBoxKeepingLocalTopLeft(el, anchorTL, snapToPixel(wantW), snapToPixel(wantH));
                 return;
             }
-            el.width = startW;
-            el.height = startH;
+            setElementBoxKeepingLocalTopLeft(el, anchorTL, startW, startH);
             if(!elementAabbInsideCanvas(el)){
-                el.width = snapToPixel(wantW);
-                el.height = snapToPixel(wantH);
+                setElementBoxKeepingLocalTopLeft(el, anchorTL, snapToPixel(wantW), snapToPixel(wantH));
                 return;
             }
             if(el.lockAspectRatio){
-                binarySearchFitSize(el, originX, originY, startW, startH, wantW, wantH);
+                binarySearchFitSize(el, anchorTL, startW, startH, wantW, wantH);
             } else {
                 if(wantW > startW){
-                    binarySearchFitSize(el, originX, originY, startW, startH, wantW, startH);
+                    binarySearchFitSize(el, anchorTL, startW, startH, wantW, startH);
                 } else {
-                    el.width = wantW;
-                    el.height = startH;
+                    setElementBoxKeepingLocalTopLeft(el, anchorTL, wantW, startH);
                 }
                 const fittedW = el.width;
                 if(wantH > startH){
-                    binarySearchFitSize(el, originX, originY, fittedW, startH, fittedW, wantH);
+                    binarySearchFitSize(el, anchorTL, fittedW, startH, fittedW, wantH);
                 } else {
-                    el.width = fittedW;
-                    el.height = wantH;
-                    el.x = originX;
-                    el.y = originY;
+                    setElementBoxKeepingLocalTopLeft(el, anchorTL, fittedW, wantH);
                     if(!elementAabbInsideCanvas(el)){
-                        binarySearchFitSize(el, originX, originY, fittedW, startH, fittedW, wantH);
+                        binarySearchFitSize(el, anchorTL, fittedW, startH, fittedW, wantH);
                     }
                 }
             }
-            el.x = originX;
-            el.y = originY;
-            el.width = snapToPixel(Math.max(minSize, el.width));
-            el.height = snapToPixel(Math.max(minSize, el.height));
+            setElementBoxKeepingLocalTopLeft(
+                el,
+                anchorTL,
+                snapToPixel(Math.max(minSize, el.width)),
+                snapToPixel(Math.max(minSize, el.height))
+            );
         }
 
         function fitElementsInsideCanvas(els){
@@ -9687,7 +9703,17 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     }
                 } else if(!isGrouped && selectedIds.length <= 1){
                     resizeMode = true;
-                    ctx = { el: clickedElement, startX: clickedElement.x, startY: clickedElement.y, startWidth: clickedElement.width, startHeight: clickedElement.height, startMouseX: smx, startMouseY: smy, isGroup: false };
+                    ctx = {
+                        el: clickedElement,
+                        startX: clickedElement.x,
+                        startY: clickedElement.y,
+                        startWidth: clickedElement.width,
+                        startHeight: clickedElement.height,
+                        startMouseX: smx,
+                        startMouseY: smy,
+                        isGroup: false,
+                        anchorTL: getLocalTopLeftWorld(clickedElement)
+                    };
                 }
             }
             
@@ -9842,15 +9868,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 nh = ctx.startHeight * scale;
             }
 
-            const originX = ctx.startX !== undefined ? ctx.startX : ctx.el.x;
-            const originY = ctx.startY !== undefined ? ctx.startY : ctx.el.y;
+            const originTL = ctx.anchorTL || getLocalTopLeftWorld(ctx.el);
             if(isUnconstrainedPointer(e)){
-                ctx.el.x = originX;
-                ctx.el.y = originY;
-                ctx.el.width = snapToPixel(Math.max(.2, nw));
-                ctx.el.height = snapToPixel(Math.max(.2, nh));
+                setElementBoxKeepingLocalTopLeft(ctx.el, originTL, snapToPixel(Math.max(.2, nw)), snapToPixel(Math.max(.2, nh)));
             } else {
-                setElementSizeStoppedAtWall(ctx.el, originX, originY, ctx.startWidth, ctx.startHeight, nw, nh);
+                setElementSizeStoppedAtWall(ctx.el, originTL, ctx.startWidth, ctx.startHeight, nw, nh);
             }
                 }
             render();
@@ -10106,7 +10128,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 }
             else el[o][k] = v;
         } else {
-            if(['x','y','width','height','zIndex'].includes(p)) el[p] = Number(v);
+            if(p === 'width' || p === 'height'){
+                const w = p === 'width' ? Number(v) : el.width;
+                const h = p === 'height' ? Number(v) : el.height;
+                setElementBoxKeepingLocalTopLeft(el, getLocalTopLeftWorld(el), w, h);
+            } else if(['x','y','zIndex'].includes(p)) el[p] = Number(v);
             else el[p] = v;
         }
     }
@@ -10306,6 +10332,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 } else {
                     if(keyPath === 'width' || keyPath === 'height'){
                         const prevW = Number(el.width), prevH = Number(el.height);
+                        const tl = getLocalTopLeftWorld(el);
                         const numVal = Number(value);
                         if(keyPath === 'width') el.width = numVal;
                         else el.height = numVal;
@@ -10313,6 +10340,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                             if(keyPath === 'width') el.height = snapToPixel(numVal * (prevH / prevW));
                             else el.width = snapToPixel(numVal * (prevW / prevH));
                         }
+                        setElementBoxKeepingLocalTopLeft(el, tl, el.width, el.height);
                     } else if(['x','y','zIndex'].includes(keyPath)) el[keyPath] = Number(value);
                     else el[keyPath] = value;
                 }
@@ -10375,6 +10403,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
             selectedIds.forEach(id=>{
                 const el = S.find(s=>s.id===id); if(!el) return;
                 const prevW = Number(el.width), prevH = Number(el.height);
+                const tl = (prop === 'width' || prop === 'height') ? getLocalTopLeftWorld(el) : null;
                 applyPropToElement(el, prop, parsedValue);
                 if(el.lockAspectRatio && (prop === 'width' || prop === 'height') && prevW > 0 && prevH > 0){
                     if(prop === 'width'){
@@ -10385,6 +10414,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                         el.width = snapToPixel(nh * (prevW / prevH));
                     }
                 }
+                if(tl) setElementBoxKeepingLocalTopLeft(el, tl, el.width, el.height);
                 if(prop === 'props.textOutlineEnabled' && parsedValue === false && el.props.textOutline2Enabled){
                     el.props.textOutline2Enabled = false;
                 }
@@ -10415,6 +10445,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
             const el = S.find(s=>s.id===id);
             if(el) {
                 const prevW = Number(el.width), prevH = Number(el.height);
+                const tl = (prop === 'width' || prop === 'height') ? getLocalTopLeftWorld(el) : null;
                 applyPropToElement(el, prop, parsedValue);
                 if(el.lockAspectRatio && (prop === 'width' || prop === 'height') && prevW > 0 && prevH > 0){
                     if(prop === 'width'){
@@ -10425,6 +10456,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                         el.width = snapToPixel(nh * (prevW / prevH));
                     }
                 }
+                if(tl) setElementBoxKeepingLocalTopLeft(el, tl, el.width, el.height);
                 if(el.masterThreadId && !isDeferredTextInput){
                     const thread = getMasterThread(el.masterThreadId);
                     if(thread){
