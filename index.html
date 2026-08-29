@@ -120,10 +120,11 @@
         .button-group{display:flex;gap:4px}
         #canvas-container{flex-grow:1;display:flex;justify-content:center;align-items:center;overflow:auto;background:#e0e0e0;padding:20px;position:relative}
         #canvas-wrapper{display:inline-block;transform-origin:center center;position:relative}
-            #label-canvas{background:#fff;box-shadow:0 4px 12px rgba(0,0,0,.15);position:relative;overflow:hidden}
+            #label-canvas{background:#fff;box-shadow:0 4px 12px rgba(0,0,0,.15);position:relative;overflow:visible}
+            .widget-mode #label-canvas{overflow:hidden}
         #marquee{position:absolute;border:1px dashed #007aff;background:rgba(0,122,255,0.08);pointer-events:none;display:none;z-index:9999}
         .label-element{position:absolute;cursor:move;border:1px solid transparent;font-size:16px;line-height:1.2;overflow:hidden;word-wrap:break-word;user-select:none;transform-origin:center center}
-        .label-element.selected{border:2px dashed #007aff;box-shadow:0 0 0 1px rgba(0,122,255,.1)}
+        .label-element.selected{border:2px dashed #007aff;box-shadow:0 0 0 1px rgba(0,122,255,.1);overflow:visible}
         .label-element.synchronized-selected{border:2px dashed #4CAF50;box-shadow:0 0 0 1px rgba(76,175,80,.2), 0 0 8px rgba(76,175,80,.3)}
         .label-element.layer-pick-focus{outline:2px dashed #9c27b0!important;box-shadow:0 0 0 2px rgba(156,39,176,0.35)!important}
         .layer-pick-peek-fragment{pointer-events:none;box-sizing:border-box}
@@ -742,34 +743,283 @@ document.addEventListener('DOMContentLoaded', ()=>{
             return roundedPixels / PIXELS_PER_CM;
         }
 
-        // Calculate bounding box for rotated element
-        function getRotatedBounds(el){
-            const rotation = Number(el.props.rotation) || 0;
-            if(rotation === 0 || rotation === 180 || rotation === -180){
-                return { width: el.width, height: el.height };
-            }
-            if(rotation === 90 || rotation === -90 || rotation === 270 || rotation === -270){
-                return { width: el.height, height: el.width };
-            }
-            // For other angles, calculate bounding box
-            const rad = (rotation * Math.PI) / 180;
-            const cos = Math.abs(Math.cos(rad));
-            const sin = Math.abs(Math.sin(rad));
+        function getElementRotationDeg(el){
+            return Number(el && el.props && el.props.rotation) || 0;
+        }
+
+        function getElementCenter(el){
             return {
-                width: el.width * cos + el.height * sin,
-                height: el.width * sin + el.height * cos
+                x: (Number(el.x) || 0) + (Number(el.width) || 0) / 2,
+                y: (Number(el.y) || 0) + (Number(el.height) || 0) / 2
             };
         }
 
-        // Get effective bounds considering rotation (for collision detection)
-        function getEffectiveBounds(el){
-            const bounds = getRotatedBounds(el);
+        // CSS rotate() is clockwise in screen space (y down): matches this matrix.
+        function rotatePointAround(px, py, cx, cy, rad){
+            const cos = Math.cos(rad);
+            const sin = Math.sin(rad);
+            const dx = px - cx;
+            const dy = py - cy;
             return {
-                x: el.x - (bounds.width - el.width) / 2,
-                y: el.y - (bounds.height - el.height) / 2,
-                width: bounds.width,
-                height: bounds.height
+                x: cx + dx * cos - dy * sin,
+                y: cy + dx * sin + dy * cos
             };
+        }
+
+        function getElementCorners(el){
+            const x = Number(el.x) || 0;
+            const y = Number(el.y) || 0;
+            const w = Number(el.width) || 0;
+            const h = Number(el.height) || 0;
+            const rad = getElementRotationDeg(el) * Math.PI / 180;
+            const c = { x: x + w / 2, y: y + h / 2 };
+            const pts = [
+                { x: x, y: y },
+                { x: x + w, y: y },
+                { x: x + w, y: y + h },
+                { x: x, y: y + h }
+            ];
+            if(!rad) return pts;
+            return pts.map(p => rotatePointAround(p.x, p.y, c.x, c.y, rad));
+        }
+
+        function aabbFromPoints(pts){
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            (pts || []).forEach(p => {
+                minX = Math.min(minX, p.x);
+                minY = Math.min(minY, p.y);
+                maxX = Math.max(maxX, p.x);
+                maxY = Math.max(maxY, p.y);
+            });
+            if(!Number.isFinite(minX)) return { x: 0, y: 0, width: 0, height: 0, minX: 0, minY: 0, maxX: 0, maxY: 0 };
+            return { x: minX, y: minY, width: maxX - minX, height: maxY - minY, minX, minY, maxX, maxY };
+        }
+
+        function getEffectiveBounds(el){
+            return aabbFromPoints(getElementCorners(el));
+        }
+
+        function getRotatedBounds(el){
+            const b = getEffectiveBounds(el);
+            return { width: b.width, height: b.height };
+        }
+
+        function worldToLocalPoint(el, x, y){
+            const c = getElementCenter(el);
+            const rad = getElementRotationDeg(el) * Math.PI / 180;
+            return rotatePointAround(x, y, c.x, c.y, -rad);
+        }
+
+        function localDeltaFromWorldDelta(el, worldDx, worldDy){
+            const rad = getElementRotationDeg(el) * Math.PI / 180;
+            const cos = Math.cos(rad);
+            const sin = Math.sin(rad);
+            return {
+                x: worldDx * cos + worldDy * sin,
+                y: -worldDx * sin + worldDy * cos
+            };
+        }
+
+        function pointInElement(el, x, y){
+            if(!el) return false;
+            const p = worldToLocalPoint(el, x, y);
+            const ex = Number(el.x) || 0;
+            const ey = Number(el.y) || 0;
+            const w = Number(el.width) || 0;
+            const h = Number(el.height) || 0;
+            return p.x >= ex && p.x <= ex + w && p.y >= ey && p.y <= ey + h;
+        }
+
+        function polygonsIntersect(polyA, polyB){
+            if(!polyA || !polyB || polyA.length < 3 || polyB.length < 3) return false;
+            const polys = [polyA, polyB];
+            for(let i = 0; i < 2; i++){
+                const poly = polys[i];
+                const n = poly.length;
+                for(let j = 0; j < n; j++){
+                    const p1 = poly[j];
+                    const p2 = poly[(j + 1) % n];
+                    const nx = p1.y - p2.y;
+                    const ny = p2.x - p1.x;
+                    let minA = Infinity, maxA = -Infinity, minB = Infinity, maxB = -Infinity;
+                    for(let k = 0; k < polyA.length; k++){
+                        const proj = polyA[k].x * nx + polyA[k].y * ny;
+                        if(proj < minA) minA = proj;
+                        if(proj > maxA) maxA = proj;
+                    }
+                    for(let k = 0; k < polyB.length; k++){
+                        const proj = polyB[k].x * nx + polyB[k].y * ny;
+                        if(proj < minB) minB = proj;
+                        if(proj > maxB) maxB = proj;
+                    }
+                    if(maxA < minB || maxB < minA) return false;
+                }
+            }
+            return true;
+        }
+
+        function rectToCorners(x1, y1, x2, y2){
+            const left = Math.min(x1, x2), right = Math.max(x1, x2);
+            const top = Math.min(y1, y2), bottom = Math.max(y1, y2);
+            return [
+                { x: left, y: top },
+                { x: right, y: top },
+                { x: right, y: bottom },
+                { x: left, y: bottom }
+            ];
+        }
+
+        function elementIntersectsRect(el, x1, y1, x2, y2){
+            return polygonsIntersect(getElementCorners(el), rectToCorners(x1, y1, x2, y2));
+        }
+
+        function elementsOverlapOnCanvas(a, b){
+            if(!a || !b || a.id === b.id) return false;
+            const aAabb = getEffectiveBounds(a);
+            const bAabb = getEffectiveBounds(b);
+            const aabbHit = aAabb.x < bAabb.x + bAabb.width && aAabb.x + aAabb.width > bAabb.x &&
+                aAabb.y < bAabb.y + bAabb.height && aAabb.y + aAabb.height > bAabb.y;
+            if(!aabbHit) return false;
+            return polygonsIntersect(getElementCorners(a), getElementCorners(b));
+        }
+
+        function topElementAtPoint(x, y, pool){
+            const list = pool || S;
+            const hits = list.filter(el => pointInElement(el, x, y))
+                .sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0) || String(b.id).localeCompare(String(a.id)));
+            return hits[0] || null;
+        }
+
+        function groupEffectiveAabb(els){
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            (els || []).forEach(el => {
+                if(!el) return;
+                const b = getEffectiveBounds(el);
+                minX = Math.min(minX, b.x);
+                minY = Math.min(minY, b.y);
+                maxX = Math.max(maxX, b.x + b.width);
+                maxY = Math.max(maxY, b.y + b.height);
+            });
+            if(!Number.isFinite(minX)) return { x: 0, y: 0, width: 0, height: 0 };
+            return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+        }
+
+        function clampElementInsideCanvas(el){
+            if(!el) return;
+            const minSize = 0.2;
+            if(Number.isFinite(Number(el.width))) el.width = Math.max(minSize, Number(el.width));
+            if(Number.isFinite(Number(el.height))) el.height = Math.max(minSize, Number(el.height));
+            const bounds = getRotatedBounds(el);
+            const ew = bounds.width, eh = bounds.height;
+            const minX = (ew - el.width) / 2;
+            const maxX = W - (ew + el.width) / 2;
+            const minY = (eh - el.height) / 2;
+            const maxY = H - (eh + el.height) / 2;
+            if(maxX < minX) el.x = (W - el.width) / 2;
+            else el.x = Math.max(minX, Math.min(el.x, maxX));
+            if(maxY < minY) el.y = (H - el.height) / 2;
+            else el.y = Math.max(minY, Math.min(el.y, maxY));
+            el.x = snapToPixel(el.x);
+            el.y = snapToPixel(el.y);
+        }
+
+        function elementAabbInsideCanvas(el){
+            const b = getEffectiveBounds(el);
+            const eps = 1e-4;
+            return b.x >= -eps && b.y >= -eps && (b.x + b.width) <= W + eps && (b.y + b.height) <= H + eps;
+        }
+
+        function binarySearchFitSize(el, originX, originY, fromW, fromH, toW, toH){
+            let lo = 0, hi = 1;
+            for(let i = 0; i < 24; i++){
+                const mid = (lo + hi) / 2;
+                el.x = originX;
+                el.y = originY;
+                el.width = fromW + (toW - fromW) * mid;
+                el.height = fromH + (toH - fromH) * mid;
+                if(elementAabbInsideCanvas(el)) lo = mid;
+                else hi = mid;
+            }
+            el.x = originX;
+            el.y = originY;
+            el.width = fromW + (toW - fromW) * lo;
+            el.height = fromH + (toH - fromH) * lo;
+        }
+
+        // Resize: keep origin (x,y) fixed and stop growth at the canvas edge.
+        // Never shift the opposite side to make room.
+        function setElementSizeStoppedAtWall(el, originX, originY, startW, startH, wantW, wantH){
+            const minSize = 0.2;
+            wantW = Math.max(minSize, wantW);
+            wantH = Math.max(minSize, wantH);
+            startW = Math.max(minSize, startW);
+            startH = Math.max(minSize, startH);
+            el.x = originX;
+            el.y = originY;
+            el.width = wantW;
+            el.height = wantH;
+            if(elementAabbInsideCanvas(el)){
+                el.width = snapToPixel(wantW);
+                el.height = snapToPixel(wantH);
+                return;
+            }
+            el.width = startW;
+            el.height = startH;
+            if(!elementAabbInsideCanvas(el)){
+                el.width = snapToPixel(wantW);
+                el.height = snapToPixel(wantH);
+                return;
+            }
+            if(el.lockAspectRatio){
+                binarySearchFitSize(el, originX, originY, startW, startH, wantW, wantH);
+            } else {
+                if(wantW > startW){
+                    binarySearchFitSize(el, originX, originY, startW, startH, wantW, startH);
+                } else {
+                    el.width = wantW;
+                    el.height = startH;
+                }
+                const fittedW = el.width;
+                if(wantH > startH){
+                    binarySearchFitSize(el, originX, originY, fittedW, startH, fittedW, wantH);
+                } else {
+                    el.width = fittedW;
+                    el.height = wantH;
+                    el.x = originX;
+                    el.y = originY;
+                    if(!elementAabbInsideCanvas(el)){
+                        binarySearchFitSize(el, originX, originY, fittedW, startH, fittedW, wantH);
+                    }
+                }
+            }
+            el.x = originX;
+            el.y = originY;
+            el.width = snapToPixel(Math.max(minSize, el.width));
+            el.height = snapToPixel(Math.max(minSize, el.height));
+        }
+
+        function fitElementsInsideCanvas(els){
+            const list = (els || []).filter(Boolean);
+            if(!list.length) return;
+            const aabb = groupEffectiveAabb(list);
+            let dx = 0, dy = 0;
+            if(aabb.width >= W) dx = -aabb.x;
+            else if(aabb.x < 0) dx = -aabb.x;
+            else if(aabb.x + aabb.width > W) dx = W - (aabb.x + aabb.width);
+            if(aabb.height >= H) dy = -aabb.y;
+            else if(aabb.y < 0) dy = -aabb.y;
+            else if(aabb.y + aabb.height > H) dy = H - (aabb.y + aabb.height);
+            if(dx || dy){
+                list.forEach(el => {
+                    el.x = snapToPixel(el.x + dx);
+                    el.y = snapToPixel(el.y + dy);
+                });
+            }
+            if(list.length === 1) clampElementInsideCanvas(list[0]);
+        }
+
+        function isUnconstrainedPointer(e){
+            return !!(e && (e.ctrlKey || e.metaKey));
         }
 
         // Generate QR code as data URL (same logic as working Untitled-1 / CDN qrcodejs)
@@ -1854,12 +2104,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
         })));
     }
 
-    function elementsOverlapOnCanvas(a, b){
-        if(!a || !b || a.id === b.id) return false;
-        return a.x < b.x + b.width && a.x + a.width > b.x &&
-            a.y < b.y + b.height && a.y + a.height > b.y;
-    }
-
     function isElementAboveOther(other, otherIdx, el, elIdx){
         const zEl = el.zIndex || 0;
         const zOther = other.zIndex || 0;
@@ -1875,10 +2119,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
             if(other.id === el.id) return;
             if(!elementsOverlapOnCanvas(el, other)) return;
             if(!isElementAboveOther(other, oidx, el, elIdx)) return;
-            const ix1 = Math.max(el.x, other.x);
-            const iy1 = Math.max(el.y, other.y);
-            const ix2 = Math.min(el.x + el.width, other.x + other.width);
-            const iy2 = Math.min(el.y + el.height, other.y + other.height);
+            const elB = getEffectiveBounds(el);
+            const otherB = getEffectiveBounds(other);
+            const ix1 = Math.max(elB.x, otherB.x);
+            const iy1 = Math.max(elB.y, otherB.y);
+            const ix2 = Math.min(elB.x + elB.width, otherB.x + otherB.width);
+            const iy2 = Math.min(elB.y + elB.height, otherB.y + otherB.height);
             if(ix2 > ix1 && iy2 > iy1){
                 rects.push({ x: ix1, y: iy1, width: ix2 - ix1, height: iy2 - iy1 });
             }
@@ -1943,6 +2189,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
         outline.style.top = `${el.y + baseOffsetY}cm`;
         outline.style.width = `${el.width}cm`;
         outline.style.height = `${el.height}cm`;
+        outline.style.transform = `rotate(${getElementRotationDeg(el)}deg)`;
+        outline.style.transformOrigin = 'center center';
         outline.style.pointerEvents = 'none';
         outline.style.zIndex = String(zPeek + rects.length);
         outline.style.boxSizing = 'border-box';
@@ -2052,10 +2300,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
     function isPointInResizeHandleZone(el, x, y){
         if(!el) return false;
+        const local = worldToLocalPoint(el, x, y);
         const handleCm = 0.55;
         const right = el.x + el.width;
         const bottom = el.y + el.height;
-        return x >= right - handleCm && x <= right + 0.15 && y >= bottom - handleCm && y <= bottom + 0.15;
+        return local.x >= right - handleCm && local.x <= right + 0.15 && local.y >= bottom - handleCm && local.y <= bottom + 0.15;
     }
 
     // ---------- Rendering ----------
@@ -2500,7 +2749,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
                             group.elementIds.forEach(eid => {
                                 const elem = S.find(e => e.id === eid);
                                 if(elem){
-                                    const distance = (elem.x + elem.width) + (elem.y + elem.height);
+                                    const b = getEffectiveBounds(elem);
+                                    const distance = (b.x + b.width) + (b.y + b.height);
                                     if(distance > maxDistance){
                                         maxDistance = distance;
                                         bottomRightElement = elem;
@@ -5368,12 +5618,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
             if(!el) return;
             const copy = deepCopy(el);
             copy.id = `el_${Date.now()}_${idx}`;
-            copy.x = Math.min(el.x + 0.2, W - el.width);
-            copy.y = Math.min(el.y + 0.2, H - el.height);
+            copy.x = el.x + 0.2;
+            copy.y = el.y + 0.2;
             copy.zIndex = mz + idx + 1;
             S.push(copy);
             newIds.push(copy.id);
         });
+        fitElementsInsideCanvas(newIds.map(id => S.find(e => e.id === id)).filter(Boolean));
         setSelection(newIds);
             saveCurrentDesign();
             saveCurrentDesign();
@@ -5404,84 +5655,21 @@ document.addEventListener('DOMContentLoaded', ()=>{
         pushBeforeChange();
         const mz = S.length > 0 ? Math.max(...S.map(e => e.zIndex || 0)) : 0;
         const newIds = [];
-        
-        // Try to offset by 0.2cm (like duplicate) first
-        const offset = 0.2;
-        let useOffset = true;
-        
-        // Check if offset would cause elements to go out of bounds
-        clipboard.forEach(el => {
-            const newX = el.x + offset;
-            const newY = el.y + offset;
-            if(newX + el.width > W || newY + el.height > H || newX < 0 || newY < 0){
-                useOffset = false;
+        const copies = [];
+        clipboard.forEach((el, idx) => {
+            const copy = deepCopy(el);
+            copy.id = `el_${Date.now()}_${idx}`;
+            copy.x = el.x + 0.2;
+            copy.y = el.y + 0.2;
+            copy.zIndex = mz + idx + 1;
+            if(el.masterThreadId){
+                copy.masterThreadId = el.masterThreadId;
             }
+            copies.push(copy);
+            newIds.push(copy.id);
         });
-        
-        if(useOffset){
-            // Use offset positioning (like duplicate)
-            clipboard.forEach((el, idx) => {
-                const copy = deepCopy(el);
-                copy.id = `el_${Date.now()}_${idx}`;
-                copy.x = Math.min(el.x + offset, W - el.width);
-                copy.y = Math.min(el.y + offset, H - el.height);
-                copy.zIndex = mz + idx + 1;
-                // Preserve masterThreadId if element was synchronized
-                // (deepCopy already preserves it, but we ensure it's maintained)
-                if(el.masterThreadId){
-                    copy.masterThreadId = el.masterThreadId;
-                }
-                S.push(copy);
-                newIds.push(copy.id);
-            });
-        } else {
-            // Center elements in canvas
-            let minX = Infinity, minY = Infinity;
-            clipboard.forEach(el => {
-                minX = Math.min(minX, el.x);
-                minY = Math.min(minY, el.y);
-            });
-            
-            let maxX = -Infinity, maxY = -Infinity;
-            clipboard.forEach(el => {
-                maxX = Math.max(maxX, el.x + el.width);
-                maxY = Math.max(maxY, el.y + el.height);
-            });
-            
-            const clipboardCenterX = (minX + maxX) / 2;
-            const clipboardCenterY = (minY + maxY) / 2;
-            const centerX = W / 2;
-            const centerY = H / 2;
-            
-            const offsetX = centerX - clipboardCenterX;
-            const offsetY = centerY - clipboardCenterY;
-            
-            clipboard.forEach((el, idx) => {
-                const copy = deepCopy(el);
-                copy.id = `el_${Date.now()}_${idx}`;
-                
-                let newX = el.x + offsetX;
-                let newY = el.y + offsetY;
-                
-                // Ensure elements stay within canvas bounds
-                newX = Math.max(0, Math.min(newX, W - copy.width));
-                newY = Math.max(0, Math.min(newY, H - copy.height));
-                
-                copy.x = newX;
-                copy.y = newY;
-                copy.zIndex = mz + idx + 1;
-                
-                // Preserve masterThreadId if element was synchronized
-                // (deepCopy already preserves it, but we ensure it's maintained)
-                if(el.masterThreadId){
-                    copy.masterThreadId = el.masterThreadId;
-                }
-                
-                S.push(copy);
-                newIds.push(copy.id);
-            });
-        }
-        
+        fitElementsInsideCanvas(copies);
+        copies.forEach(copy => S.push(copy));
         setSelection(newIds);
         render();
         updateProps();
@@ -5550,10 +5738,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
         if(els.length === 0) return null;
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         els.forEach(el => {
-            minX = Math.min(minX, el.x);
-            minY = Math.min(minY, el.y);
-            maxX = Math.max(maxX, el.x + el.width);
-            maxY = Math.max(maxY, el.y + el.height);
+            const b = getEffectiveBounds(el);
+            minX = Math.min(minX, b.x);
+            minY = Math.min(minY, b.y);
+            maxX = Math.max(maxX, b.x + b.width);
+            maxY = Math.max(maxY, b.y + b.height);
         });
         return { minX, minY, maxX, maxY, els };
     }
@@ -5567,7 +5756,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
         if(Math.abs(deltaX) < 1e-9) return;
         pushBeforeChange();
         b.els.forEach(el => {
-            el.x = snapToPixel(Math.max(0, Math.min(el.x + deltaX, W - el.width)));
+            el.x = snapToPixel(el.x + deltaX);
+            clampElementInsideCanvas(el);
         });
         render(); updateProps(); updateBtns();
         saveCurrentDesign();
@@ -5582,7 +5772,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
         if(Math.abs(deltaY) < 1e-9) return;
         pushBeforeChange();
         b.els.forEach(el => {
-            el.y = snapToPixel(Math.max(0, Math.min(el.y + deltaY, H - el.height)));
+            el.y = snapToPixel(el.y + deltaY);
+            clampElementInsideCanvas(el);
         });
         render(); updateProps(); updateBtns();
         saveCurrentDesign();
@@ -5625,16 +5816,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
             
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
             elements.forEach(el => {
-                const bounds = getRotatedBounds(el);
-                const left = el.x;
-                const top = el.y;
-                const right = left + bounds.width;
-                const bottom = top + bounds.height;
-                
-                minX = Math.min(minX, left);
-                minY = Math.min(minY, top);
-                maxX = Math.max(maxX, right);
-                maxY = Math.max(maxY, bottom);
+                const b = getEffectiveBounds(el);
+                minX = Math.min(minX, b.x);
+                minY = Math.min(minY, b.y);
+                maxX = Math.max(maxX, b.x + b.width);
+                maxY = Math.max(maxY, b.y + b.height);
             });
             
             return {
@@ -9086,43 +9272,48 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 }, 0);
             
             const t = e.target;
-            // If clicking on the background of label-canvas, start marquee selection
-            if(t === lc){
-                startMarqueeSelection(e);
-            return;
-        }
+            const pt = canvasPointFromClient(e.clientX, e.clientY);
+            let id = null;
+            let clickedElement = null;
 
-        const pt = canvasPointFromClient(e.clientX, e.clientY);
-        let id = null;
-        let clickedElement = null;
-
-        if(e.shiftKey && shiftLayerPickIndex >= 0){
-            const slices = computeOverlapStackSlices();
-            const sliceIds = shiftLayerPickIndex < slices.length ? slices[shiftLayerPickIndex] : null;
-            if(sliceIds){
-                const pickSet = new Set(sliceIds);
-                const candidates = S.filter(x => pickSet.has(x.id) &&
-                    pt.x >= x.x && pt.x <= x.x + x.width && pt.y >= x.y && pt.y <= x.y + x.height)
-                    .sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0) || String(b.id).localeCompare(String(a.id)));
-                if(candidates.length){
-                    clickedElement = candidates[0];
-                    id = clickedElement.id;
+            if(e.shiftKey && shiftLayerPickIndex >= 0){
+                const slices = computeOverlapStackSlices();
+                const sliceIds = shiftLayerPickIndex < slices.length ? slices[shiftLayerPickIndex] : null;
+                if(sliceIds){
+                    const pickSet = new Set(sliceIds);
+                    clickedElement = topElementAtPoint(pt.x, pt.y, S.filter(x => pickSet.has(x.id)));
+                    if(clickedElement) id = clickedElement.id;
                 }
             }
-        }
 
-        if(!id){
-            const te = t.closest('.label-element');
-            if(!te) return;
-            id = te.dataset.id;
-            clickedElement = S.find(x => x.id === id);
-            if(!clickedElement) return;
-        }
+            if(!id){
+                const resizeHost = (t.classList && t.classList.contains('resize-handle')) ? t : (t.closest && t.closest('.resize-handle'));
+                if(resizeHost){
+                    const te = resizeHost.closest('.label-element');
+                    if(te){
+                        id = te.dataset.id;
+                        clickedElement = S.find(x => x.id === te.dataset.id);
+                    }
+                }
+                if(!clickedElement){
+                    clickedElement = topElementAtPoint(pt.x, pt.y);
+                    if(clickedElement) id = clickedElement.id;
+                }
+            }
+
+            if(!id){
+                if(t === lc || t === cc){
+                    startMarqueeSelection(e);
+                }
+                return;
+            }
 
         // selection logic
         if(e.ctrlKey || e.metaKey){
-            pushBeforeChange();
-            toggleSelection(id);
+            if(!selectedIds.includes(id)){
+                pushBeforeChange();
+                toggleSelection(id);
+            }
         } else {
             if(!selectedIds.includes(id)){
                 pushBeforeChange();
@@ -9144,12 +9335,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
             const isGrouped = group !== undefined;
             
             // Check if clicked on resize handle (including inner element)
-            let resizeHandle = t.classList.contains('resize-handle') ? t : t.closest('.resize-handle');
-            if(!resizeHandle && e.shiftKey && shiftLayerPickIndex >= 0 && id){
-                const slices = computeOverlapStackSlices();
-                const sliceIds = shiftLayerPickIndex < slices.length ? slices[shiftLayerPickIndex] : [];
-                if(sliceIds.includes(id) && isPointInResizeHandleZone(clickedElement, smx, smy)) resizeHandle = true;
-            }
+            let resizeHandle = (t.classList && t.classList.contains('resize-handle')) ? t : (t.closest && t.closest('.resize-handle'));
+            if(!resizeHandle && id && isPointInResizeHandleZone(clickedElement, smx, smy)) resizeHandle = true;
             if(resizeHandle){
                 if(isGrouped){
                     // Resize group - check if all group elements are selected or just this one
@@ -9204,7 +9391,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     }
                 } else if(!isGrouped && selectedIds.length <= 1){
                     resizeMode = true;
-                    ctx = { el: clickedElement, startWidth: clickedElement.width, startHeight: clickedElement.height, startMouseX: smx, startMouseY: smy, isGroup: false };
+                    ctx = { el: clickedElement, startX: clickedElement.x, startY: clickedElement.y, startWidth: clickedElement.width, startHeight: clickedElement.height, startMouseX: smx, startMouseY: smy, isGroup: false };
                 }
             }
             
@@ -9277,21 +9464,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     let newX = it.startX + dx;
                     let newY = it.startY + dy;
                     
-                    // Get effective bounds considering rotation
-                    const bounds = getRotatedBounds(el);
-                    const effectiveWidth = bounds.width;
-                    const effectiveHeight = bounds.height;
+                    if(!isUnconstrainedPointer(e)){
+                        const bounds = getRotatedBounds(el);
+                        const effectiveWidth = bounds.width;
+                        const effectiveHeight = bounds.height;
+                        newX = Math.max((effectiveWidth - el.width) / 2, Math.min(newX, W - (effectiveWidth + el.width) / 2));
+                        newY = Math.max((effectiveHeight - el.height) / 2, Math.min(newY, H - (effectiveHeight + el.height) / 2));
+                    }
                     
-                    // Constrain to canvas bounds considering rotation
-                    // The element center should stay within bounds
-                    const centerX = newX + el.width / 2;
-                    const centerY = newY + el.height / 2;
-                    
-                    // Adjust position to keep rotated bounding box within canvas
-                    newX = Math.max((effectiveWidth - el.width) / 2, Math.min(newX, W - (effectiveWidth + el.width) / 2));
-                    newY = Math.max((effectiveHeight - el.height) / 2, Math.min(newY, H - (effectiveHeight + el.height) / 2));
-                    
-                        // Snap to pixel precision
                         el.x = snapToPixel(newX);
                         el.y = snapToPixel(newY);
             });
@@ -9312,15 +9492,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     // Ensure minimum scale
                     scale = Math.max(0.1, scale);
                     
-                    // Constrain to canvas - check if scaled group fits
-                    const newWidth = originalBounds.width * scale;
-                    const newHeight = originalBounds.height * scale;
-                    const maxWidth = W - originalBounds.x;
-                    const maxHeight = H - originalBounds.y;
-                    
-                    // Limit scale to fit within canvas
-                    if(newWidth > maxWidth) scale = Math.min(scale, maxWidth / originalBounds.width);
-                    if(newHeight > maxHeight) scale = Math.min(scale, maxHeight / originalBounds.height);
+                    if(!isUnconstrainedPointer(e)){
+                        const newWidth = originalBounds.width * scale;
+                        const newHeight = originalBounds.height * scale;
+                        const maxWidth = W - originalBounds.x;
+                        const maxHeight = H - originalBounds.y;
+                        if(newWidth > maxWidth) scale = Math.min(scale, maxWidth / originalBounds.width);
+                        if(newHeight > maxHeight) scale = Math.min(scale, maxHeight / originalBounds.height);
+                    }
                     
                     // Apply uniform scaling to all elements in group (including properties)
                     ctx.group.elementIds.forEach(elementId => {
@@ -9366,18 +9545,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     // Update group bounds
                     ctx.group.bounds = getGroupBounds(ctx.group.elementIds);
                 } else if(ctx.el){
-            const dx = mx - ctx.startMouseX;
-            const dy = my - ctx.startMouseY;
-            let nw = ctx.startWidth + dx;
-            let nh = ctx.startHeight + dy;
+            const worldDx = mx - ctx.startMouseX;
+            const worldDy = my - ctx.startMouseY;
+            const local = localDeltaFromWorldDelta(ctx.el, worldDx, worldDy);
+            let nw = ctx.startWidth + local.x;
+            let nh = ctx.startHeight + local.y;
             
-            // Shift key constraint: allow only horizontal or vertical resize
             if(e.shiftKey){
-                if(Math.abs(dx) >= Math.abs(dy)){
-                    // Horizontal resize only
+                if(Math.abs(local.x) >= Math.abs(local.y)){
                     nh = ctx.startHeight;
                 } else {
-                    // Vertical resize only
                     nw = ctx.startWidth;
                 }
             }
@@ -9387,46 +9564,17 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 nw = ctx.startWidth * scale;
                 nh = ctx.startHeight * scale;
             }
-                
-                // Get current rotation
-                const rotation = Number(ctx.el.props.rotation) || 0;
-                const bounds = getRotatedBounds({ width: nw, height: nh, props: { rotation: rotation } });
-                
-                // Constrain resize considering rotation
-                const maxWidth = W - ctx.el.x;
-                const maxHeight = H - ctx.el.y;
-                
-                // For rotated elements, we need to check if the rotated bounding box fits
-                        let finalWidth, finalHeight;
-                if(rotation === 0 || rotation === 180 || rotation === -180){
-                            finalWidth = Math.max(.2, Math.min(nw, maxWidth));
-                            finalHeight = Math.max(.2, Math.min(nh, maxHeight));
-                } else if(rotation === 90 || rotation === -90 || rotation === 270 || rotation === -270){
-                    // When rotated 90°, width and height are swapped
-                            finalWidth = Math.max(.2, Math.min(nw, maxWidth));
-                            finalHeight = Math.max(.2, Math.min(nh, maxHeight));
-                    // Check if rotated bounding box fits
-                            if(finalHeight > maxWidth) finalHeight = maxWidth;
-                            if(finalWidth > maxHeight) finalWidth = maxHeight;
-                } else {
-                    // For other angles, use the rotated bounds
-                            finalWidth = Math.max(.2, nw);
-                            finalHeight = Math.max(.2, nh);
-                    // Check if rotated bounding box fits
-                    if(bounds.width > W - ctx.el.x) {
-                        const scale = (W - ctx.el.x) / bounds.width;
-                                finalWidth *= scale;
-                                finalHeight *= scale;
-                    }
-                    if(bounds.height > H - ctx.el.y) {
-                        const scale = (H - ctx.el.y) / bounds.height;
-                                finalWidth *= scale;
-                                finalHeight *= scale;
-                    }
-                        }
-                        // Snap to pixel precision
-                        ctx.el.width = snapToPixel(finalWidth);
-                        ctx.el.height = snapToPixel(finalHeight);
+
+            const originX = ctx.startX !== undefined ? ctx.startX : ctx.el.x;
+            const originY = ctx.startY !== undefined ? ctx.startY : ctx.el.y;
+            if(isUnconstrainedPointer(e)){
+                ctx.el.x = originX;
+                ctx.el.y = originY;
+                ctx.el.width = snapToPixel(Math.max(.2, nw));
+                ctx.el.height = snapToPixel(Math.max(.2, nh));
+            } else {
+                setElementSizeStoppedAtWall(ctx.el, originX, originY, ctx.startWidth, ctx.startHeight, nw, nh);
+            }
                 }
             render();
             updateProps();
@@ -9493,12 +9641,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
                 // select elements whose rectangles intersect the selection rect
                 S.forEach(el=>{
-                    const elLeft = el.x;
-                    const elTop = el.y;
-                    const elRight = el.x + el.width;
-                    const elBottom = el.y + el.height;
-                    const intersect = !(elRight < cmLeft || elLeft > cmRight || elBottom < cmTop || elTop > cmBottom);
-                    if(intersect) selected.push(el.id);
+                    if(elementIntersectsRect(el, cmLeft, cmTop, cmRight, cmBottom)) selected.push(el.id);
                 });
             }
 
@@ -9592,30 +9735,30 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     pushBeforeChange();
                     selectedIds.forEach(id=>{
                         const el = S.find(s=>s.id===id); if(!el) return;
-                            // Get effective bounds considering rotation
                             const bounds = getRotatedBounds(el);
                             const effectiveWidth = bounds.width;
                             const effectiveHeight = bounds.height;
+                            const free = isUnconstrainedPointer(e);
                             
                         switch(e.key){
                                 case 'ArrowUp': {
                                     const newY = el.y - step;
-                                    el.y = snapToPixel(Math.max((effectiveHeight - el.height) / 2, newY));
+                                    el.y = snapToPixel(free ? newY : Math.max((effectiveHeight - el.height) / 2, newY));
                                     break;
                                 }
                                 case 'ArrowDown': {
                                     const newY = el.y + step;
-                                    el.y = snapToPixel(Math.min(H - (effectiveHeight + el.height) / 2, newY));
+                                    el.y = snapToPixel(free ? newY : Math.min(H - (effectiveHeight + el.height) / 2, newY));
                                     break;
                                 }
                                 case 'ArrowLeft': {
                                     const newX = el.x - step;
-                                    el.x = snapToPixel(Math.max((effectiveWidth - el.width) / 2, newX));
+                                    el.x = snapToPixel(free ? newX : Math.max((effectiveWidth - el.width) / 2, newX));
                                     break;
                                 }
                                 case 'ArrowRight': {
                                     const newX = el.x + step;
-                                    el.x = snapToPixel(Math.min(W - (effectiveWidth + el.width) / 2, newX));
+                                    el.x = snapToPixel(free ? newX : Math.min(W - (effectiveWidth + el.width) / 2, newX));
                                     break;
                             }
                         }
