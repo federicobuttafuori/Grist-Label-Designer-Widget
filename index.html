@@ -3686,6 +3686,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
             to.style.lineHeight = from.style.lineHeight;
             to.style.letterSpacing = from.style.letterSpacing;
             to.style.textDecoration = from.style.textDecoration;
+            to.style.textAlign = from.style.textAlign;
             to.style.color = from.style.color;
             to.style.display = 'block';
             to.style.position = 'static';
@@ -3693,6 +3694,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
             to.style.margin = '0';
             to.style.border = 'none';
             to.style.padding = '0';
+            to.style.boxSizing = 'content-box';
             to.style.transform = '';
             to.style.transformOrigin = '';
             to.style.maxWidth = 'none';
@@ -3716,7 +3718,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 }
             }
             host.appendChild(clone);
-            const size = { width: Math.ceil(clone.scrollWidth), height: Math.ceil(clone.scrollHeight) };
+            const size = {
+                width: Math.ceil(Math.max(clone.scrollWidth, clone.offsetWidth)),
+                height: Math.ceil(Math.max(clone.scrollHeight, clone.offsetHeight))
+            };
             host.innerHTML = '';
             return size;
         }
@@ -3751,9 +3756,125 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 }
             }
             document.body.appendChild(measureDiv);
-            const size = { width: measureDiv.offsetWidth, height: measureDiv.offsetHeight };
+            const size = {
+                width: Math.ceil(Math.max(measureDiv.offsetWidth, measureDiv.scrollWidth)),
+                height: Math.ceil(Math.max(measureDiv.offsetHeight, measureDiv.scrollHeight))
+            };
             document.body.removeChild(measureDiv);
             return size;
+        }
+        function parseStylePx(val){
+            if(val == null || val === '' || val === 'normal' || val === 'inherit') return null;
+            const n = parseFloat(val);
+            return Number.isFinite(n) ? n : null;
+        }
+        function snapshotTextFitStyles(root){
+            return [root, ...root.querySelectorAll('*')].map(node => ({
+                node,
+                fontSize: node.style.fontSize,
+                paddingTop: node.style.paddingTop,
+                paddingRight: node.style.paddingRight,
+                paddingBottom: node.style.paddingBottom,
+                paddingLeft: node.style.paddingLeft,
+                letterSpacing: node.style.letterSpacing
+            }));
+        }
+        function restoreTextFitStyles(snap){
+            snap.forEach(s => {
+                s.node.style.fontSize = s.fontSize;
+                s.node.style.paddingTop = s.paddingTop;
+                s.node.style.paddingRight = s.paddingRight;
+                s.node.style.paddingBottom = s.paddingBottom;
+                s.node.style.paddingLeft = s.paddingLeft;
+                s.node.style.letterSpacing = s.letterSpacing;
+            });
+        }
+        function applyTextFitScale(snap, factor, minPx){
+            snap.forEach(s => {
+                const fs = parseStylePx(s.fontSize);
+                if(fs != null) s.node.style.fontSize = Math.max(minPx, fs * factor) + 'px';
+                ['paddingTop','paddingRight','paddingBottom','paddingLeft'].forEach(key => {
+                    const raw = s[key];
+                    const v = parseStylePx(raw);
+                    if(v == null) return;
+                    const unit = /cm\s*$/i.test(raw) ? 'cm' : 'px';
+                    s.node.style[key] = (v * factor) + unit;
+                });
+                const ls = parseStylePx(s.letterSpacing);
+                if(ls != null) s.node.style.letterSpacing = (ls * factor) + 'px';
+            });
+        }
+        function overflowInnerBox(el, container, containerWidth, containerHeight, isPrintMode){
+            const safety = 2;
+            if(!isPrintMode && container){
+                const cs = getComputedStyle(container);
+                const w = container.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+                const h = container.clientHeight - (parseFloat(cs.paddingTop) || 0) - (parseFloat(cs.paddingBottom) || 0);
+                return { width: Math.max(0, w - safety), height: Math.max(0, h - safety) };
+            }
+            const pad = (k) => (Number(el.props[k]) || 0) * PIXELS_PER_CM;
+            const bw = (el.props.showBorder && el.props.borderWidth) ? Number(el.props.borderWidth) : 0;
+            const side = (k) => (el.props[k] !== false) ? bw : 0;
+            return {
+                width: Math.max(0, containerWidth - pad('paddingLeft') - pad('paddingRight') - side('borderLeft') - side('borderRight') - safety),
+                height: Math.max(0, containerHeight - pad('paddingTop') - pad('paddingBottom') - side('borderTop') - side('borderBottom') - safety)
+            };
+        }
+        function measureFittedTextHeight(span, widthPx, formatted){
+            if(widthPx <= 0) return 0;
+            if(formatted) return measureFormattedSpan(span, { widthPx, singleLine: false }).height;
+            return measureLegacyPlainText(span, { widthPx, singleLine: false }).height;
+        }
+        function fitTextFontToHeight(span, el, widthPx, heightPx, formatted){
+            span.style.transform = '';
+            span.style.transformOrigin = '';
+            span.style.width = widthPx + 'px';
+            span.style.maxWidth = widthPx + 'px';
+            span.style.overflow = 'hidden';
+            const minPx = 6;
+            if(formatted){
+                const snap = snapshotTextFitStyles(span);
+                const heightAt = (factor) => {
+                    applyTextFitScale(snap, factor, minPx);
+                    const h = measureFittedTextHeight(span, widthPx, true);
+                    restoreTextFitStyles(snap);
+                    return h;
+                };
+                const h0 = heightAt(1);
+                if(h0 <= 0 || h0 <= heightPx) return;
+                let lo = 0.1;
+                let hi = 1;
+                let best = lo;
+                for(let i = 0; i < 14; i++){
+                    const mid = (lo + hi) / 2;
+                    if(heightAt(mid) <= heightPx){
+                        best = mid;
+                        lo = mid;
+                    } else {
+                        hi = mid;
+                    }
+                }
+                applyTextFitScale(snap, best, minPx);
+                return;
+            }
+            const base = Number(el.props.fontSize) || 16;
+            span.style.fontSize = base + 'px';
+            const h0 = measureFittedTextHeight(span, widthPx, false);
+            if(h0 <= 0 || h0 <= heightPx) return;
+            let lo = minPx;
+            let hi = base;
+            let best = minPx;
+            for(let i = 0; i < 14; i++){
+                const mid = (lo + hi) / 2;
+                span.style.fontSize = mid + 'px';
+                if(measureFittedTextHeight(span, widthPx, false) <= heightPx){
+                    best = mid;
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
+            }
+            span.style.fontSize = best + 'px';
         }
         function legacySqueezeTransformOrigin(el){
             const textAlign = el.props.textAlign || 'left';
@@ -3777,150 +3898,59 @@ document.addEventListener('DOMContentLoaded', ()=>{
         // Helper function to apply text overflow handling
         function applyTextOverflow(span, el, containerWidth, containerHeight, isPrintMode){
             const overflowMode = el.props.textOverflow || 'clip';
-            if(overflowMode === 'clip') return; // Default behavior, no changes needed
+            if(overflowMode === 'clip') return;
             
-            // Get the parent container (d element)
             const container = span.parentElement;
             span.style.transform = '';
             span.style.transformOrigin = '';
+            const box = overflowInnerBox(el, container, containerWidth, containerHeight, isPrintMode);
             
             if(overflowMode === 'squeeze'){
-                // Horizontal squeeze: compress text horizontally when it's too wide
-                // Calculate available width (accounting for padding and borders)
-                const safetyMargin = 2;
-                let availableWidth;
-                if(isPrintMode){
-                    // In print mode, convert padding from cm to pixels
-                    const paddingLeft = (Number(el.props.paddingLeft) || 0) * PIXELS_PER_CM;
-                    const paddingRight = (Number(el.props.paddingRight) || 0) * PIXELS_PER_CM;
-                    const borderWidth = (el.props.showBorder && el.props.borderWidth) ? Number(el.props.borderWidth) : 0;
-                    const borderLeft = (el.props.borderLeft !== false) ? borderWidth : 0;
-                    const borderRight = (el.props.borderRight !== false) ? borderWidth : 0;
-                    availableWidth = containerWidth - paddingLeft - paddingRight - borderLeft - borderRight - safetyMargin;
-                } else {
-                    const paddingLeft = Number(el.props.paddingLeft) || 0;
-                    const paddingRight = Number(el.props.paddingRight) || 0;
-                    const borderWidth = (el.props.showBorder && el.props.borderWidth) ? Number(el.props.borderWidth) : 0;
-                    const borderLeft = (el.props.borderLeft !== false) ? borderWidth : 0;
-                    const borderRight = (el.props.borderRight !== false) ? borderWidth : 0;
-                    availableWidth = containerWidth - paddingLeft - paddingRight - borderLeft - borderRight - safetyMargin;
-                }
-                
+                const availableWidth = box.width;
                 if(availableWidth <= 0) return;
                 
                 const formattedMeasure = usesFormattedOverflowMeasure(el);
-                // For print mode, execute synchronously; for normal mode, use requestAnimationFrame
                 const executeSqueeze = () => {
                     const textWidth = formattedMeasure
                         ? measureFormattedSpan(span, { singleLine: true }).width
                         : measureLegacyPlainText(span, { singleLine: true }).width;
                     
                     if(textWidth > availableWidth){
-                        // Calculate scale factor
                         const scaleX = Math.max(0.1, (availableWidth / textWidth));
-                        // Apply horizontal squeeze with transform-origin based on text alignment
                         span.style.transform = `scaleX(${scaleX})`;
                         span.style.transformOrigin = formattedMeasure
                             ? textOverflowTransformOrigin(el, 'x')
                             : legacySqueezeTransformOrigin(el);
-                        
-                        // Ensure span can show all compressed text
                         span.style.width = 'auto';
                         span.style.overflow = 'visible';
                         span.style.maxWidth = 'none';
-                        span.style.wordWrap = 'normal'; // Disable word wrapping for squeeze
-                        
-                        // Allow container to show compressed text
+                        span.style.wordWrap = 'normal';
                         if(container){
                             container.style.overflow = 'visible';
                         }
                     } else {
-                        // Reset transform if text fits
                         span.style.transform = '';
                         span.style.transformOrigin = '';
                     }
                 };
                 
                 if(isPrintMode){
-                    // Execute synchronously for print
                     executeSqueeze();
                 } else {
-                    // Use requestAnimationFrame for normal rendering
                     requestAnimationFrame(executeSqueeze);
                 }
                 return;
             }
             
-            // For auto-scale: check bottom overflow and reduce font size
-            // Calculate available height (accounting for padding and borders)
-            const safetyMargin = 2;
-            let availableHeight;
-            
-            // Calculate padding and borders in pixels
-            const paddingTop = (Number(el.props.paddingTop) || 0) * PIXELS_PER_CM;
-            const paddingBottom = (Number(el.props.paddingBottom) || 0) * PIXELS_PER_CM;
-            const borderWidth = (el.props.showBorder && el.props.borderWidth) ? Number(el.props.borderWidth) : 0;
-            const borderTop = (el.props.borderTop !== false) ? borderWidth : 0;
-            const borderBottom = (el.props.borderBottom !== false) ? borderWidth : 0;
-            
-            // In print mode, padding is applied to container via CSS (in cm)
-            // containerHeight is the total element height in pixels
-            // The span is inside the container, so available height = containerHeight - padding - border
-            availableHeight = containerHeight - paddingTop - paddingBottom - borderTop - borderBottom - safetyMargin;
-            
-            if(availableHeight <= 0) return; // No space available
-            
+            if(box.width <= 0 || box.height <= 0) return;
             const formattedMeasure = usesFormattedOverflowMeasure(el);
-            // Function to apply auto-scale
             const executeAutoScale = () => {
-                let spanWidth;
-                if(isPrintMode){
-                    const paddingLeft = (Number(el.props.paddingLeft) || 0) * PIXELS_PER_CM;
-                    const paddingRight = (Number(el.props.paddingRight) || 0) * PIXELS_PER_CM;
-                    const borderLeft = (el.props.borderLeft !== false) ? borderWidth : 0;
-                    const borderRight = (el.props.borderRight !== false) ? borderWidth : 0;
-                    spanWidth = containerWidth - paddingLeft - paddingRight - borderLeft - borderRight;
-                } else {
-                    spanWidth = span.offsetWidth || containerWidth;
-                }
-                
-                if(spanWidth <= 0 || availableHeight <= 0) return;
-
-                if(formattedMeasure){
-                    const measured = measureFormattedSpan(span, { widthPx: spanWidth, singleLine: false });
-                    if(measured.height <= availableHeight) return;
-                    const scale = Math.max(0.1, availableHeight / measured.height);
-                    span.style.transform = `scale(${scale})`;
-                    span.style.transformOrigin = textOverflowTransformOrigin(el);
-                    span.style.overflow = 'visible';
-                    if(container) container.style.overflow = 'visible';
-                    return;
-                }
-
-                // Legacy: riduce fontSize del contenitore (ignora stili inline regex)
-                span.style.transform = '';
-                span.style.transformOrigin = '';
-                const baseFontSize = Number(el.props.fontSize) || 16;
-                const minFontSize = 6;
-                let fontSize = baseFontSize;
-                span.style.fontSize = fontSize + 'px';
-                if(spanWidth > 0){
-                    span.style.width = spanWidth + 'px';
-                }
-                let guard = 0;
-                while(span.scrollHeight > availableHeight && fontSize > minFontSize && guard < 400){
-                    fontSize -= 0.5;
-                    span.style.fontSize = fontSize + 'px';
-                    guard++;
-                }
+                fitTextFontToHeight(span, el, box.width, box.height, formattedMeasure);
             };
             
-            // Check if text overflows at the bottom (after natural wrapping)
             if(isPrintMode){
-                // For print mode, execute immediately
                 executeAutoScale();
             } else {
-                // Use requestAnimationFrame for normal rendering
                 requestAnimationFrame(() => {
                     requestAnimationFrame(executeAutoScale);
                 });
