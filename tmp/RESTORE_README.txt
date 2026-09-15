@@ -1,5 +1,15 @@
---- a/index.html
-+++ b/index.html
-@@ gesture-focus-canvas-fix @@
-See workspace file /workspace/agent-tools/index-fixed-full.html and commit a20cc39 for full restored+fixed index.html (697339 bytes).
-Local box has complete file; remote main was accidentally truncated to 35 bytes by a path-sentinel experiment.
+URGENT: main index.html is truncated (~51 bytes).
+
+Restore from box file (contains gesture-focus fix):
+  /workspace/agent-tools/index-fixed-full.html  (697339 bytes)
+  /workspace/Grist-Label-Designer-Widget/index.html
+  /tmp/FULL_CONTENT.txt
+
+Diff only:
+  /workspace/agent-tools/gesture-fix.diff
+
+Local commit (unpushed): a20cc39046471f722303f0a5610c8982e066421b
+Message: Defer canvas render while pointer gesture runs so sidebar blur cannot break resize/drag.
+
+Use Windows Shell machineId faa5abfd-f8e9-4737-81f9-c24a8cae3cd5 to copy+git push,
+or CallMcpTool create_or_update_file with the FULL file contents (not a path sentinel).
