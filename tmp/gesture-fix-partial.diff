@@ -1,0 +1,43 @@
+--- a/index.html
++++ b/index.html
+@@ -578,9 +578,43 @@
+     let columnRefToRecordKey = new Map();
+     let columnLabelToRefs = new Map();
+     let drag = false, resizeMode = false, ctx = {};
++    let canvasGestureActive = false;
++    let deferredCanvasRefresh = false;
++    let pendingCanvasFocus = false;
+     let dragMoved = false;
+     let pointerDownClient = { x: 0, y: 0 };
+     let pendingSelectClick = null;
++
++    function requestCanvasRefresh(){
++        if(canvasGestureActive){
++            deferredCanvasRefresh = true;
++            return true;
++        }
++        return false;
++    }
++    function flushDeferredCanvasRefresh(){
++        if(!deferredCanvasRefresh) return;
++        deferredCanvasRefresh = false;
++        render();
++        updateProps();
++    }
++    function blurSidebarForCanvas(){
++        const sidebar = document.getElementById('sidebar');
++        if(!sidebar) return;
++        const focusedElement = sidebar.querySelector(':focus');
++        if(focusedElement) focusedElement.blur();
++    }
++    function endCanvasPointerGesture(){
++        canvasGestureActive = false;
++        if(pendingCanvasFocus){
++            pendingCanvasFocus = false;
++            if(cc){
++                if(cc.tabIndex === -1) cc.setAttribute('tabindex', '-1');
++                cc.focus();
++            }
++        }
++        flushDeferredCanvasRefresh();
++    }
